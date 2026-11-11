@@ -1,3 +1,9 @@
+# Compile Free My TV sur les serveurs de GitHub (aucun outil à installer sur ton ordinateur).
+# À placer dans ton fork, dans le dossier .github/workflows/ sous le nom build-apk.yml.
+# Ensuite : onglet "Actions" > "Build APK" > "Run workflow", puis télécharger FreeMyTV-apk en bas de la page du run.
+#
+# Clé de signature fixe : si les deux secrets KEYSTORE_B64 et KEYSTORE_PASS existent (Settings > Secrets and variables > Actions),
+# chaque APK est signé avec la même clé et se réinstalle par-dessus l'ancien (adb install -r), sans désinstaller.
 name: Build APK
 
 on:
@@ -11,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      # Mêmes outils que ceux que le projet utilise pour sa propre vérification (JDK 17, build-tools 34, android-34)
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -20,6 +27,19 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$RUNNER_TEMP/sdk" \
             "build-tools;34.0.0" "platforms;android-34" > /dev/null
           echo "ANDROID_HOME=$RUNNER_TEMP/sdk" >> "$GITHUB_ENV"
+      - name: Clé de signature fixe (si les secrets existent)
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASS" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nina.keystore"
+            echo "FREEMYTV_KEYSTORE=$RUNNER_TEMP/nina.keystore" >> "$GITHUB_ENV"
+            echo "FREEMYTV_KEYSTORE_PASS=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+            echo "Clé fixe trouvée : l'APK sera signé avec."
+          else
+            echo "Pas de clé fixe : une clé jetable sera créée (il faudra désinstaller l'ancienne app)."
+          fi
       - name: Compiler
         run: ./build.sh --generic
       - uses: actions/upload-artifact@v4
