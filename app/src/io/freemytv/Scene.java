@@ -120,6 +120,8 @@ final class Scene {
 
     private void push() {
         dim = Math.min(0.6f, baseDim + Math.max(0, Math.min(0.22f, (palette.brightest() - 0.45f) * 0.5f)));
+        // Pastel themes: the vignette would turn them grey, so a little light instead of the dimming.
+        if (Prefs.skinOn()) dim = -0.12f * Math.min(1f, palette.brightest() / 0.7f);
         if (aurora == null) return;
         aurora.setFloatUniform("speed", speed);
         aurora.setFloatUniform("dim", dim);

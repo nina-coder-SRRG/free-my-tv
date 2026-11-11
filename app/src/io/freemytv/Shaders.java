@@ -337,9 +337,40 @@ final class Shaders {
         return ((c.get(java.util.Calendar.HOUR_OF_DAY) * 60L + c.get(java.util.Calendar.MINUTE)) * 60 + c.get(java.util.Calendar.SECOND)) * 1000L;
     }
 
-    /** Screensaver: always the night palette, by day and by night. */
+    /** Screensaver: always the night palette, by day and by night (or the pastel theme's). */
     static void dream(Palette out) {
         out.set(NIGHT[0], NIGHT[1], NIGHT[2]);
+    }
+
+    // MARK: - Pastel themes (Home Settings > Theme)
+
+    static final String[] SKINS = {"crepuscule", "aurore", "brume", "opale"};
+    static final String[] SKIN_NAMES = {"Crépuscule", "Aurore", "Brume", "Opale"};
+    private static final int[][] SKIN_DAY = {
+        {0xFFC8B0, 0xB9A6F0, 0x9CC5F5},
+        {0xFFE7A3, 0xFFC2B8, 0xF9C9E0},
+        {0xBFE5F7, 0xCDF1E2, 0xFFE2C6},
+        {0xD9E8FF, 0xE9D5FF, 0xFFE4F1}};
+    private static final int[] SKIN_INK = {0xFF2A2347, 0xFF3A2418, 0xFF17323A, 0xFF1F2A44};
+    private static final int SKIN_DARK = 0x0D0A16;
+
+    /** Index of a theme, -1 for "classic" or an unknown name. */
+    static int skinIndex(String id) {
+        for (int i = 0; i < SKINS.length; i++) if (SKINS[i].equals(id)) return i;
+        return -1;
+    }
+
+    /** Text color on the theme's pastel background (by day). */
+    static int skinInk(String id) {
+        int i = skinIndex(id);
+        return i < 0 ? 0xFF1D1D1F : SKIN_INK[i];
+    }
+
+    /** The theme's palette: its pastel colors by day, the same colors sunk into the dark at night (0 = day, 1 = night). */
+    static void skin(Palette out, String id, float night) {
+        int i = Math.max(0, skinIndex(id));
+        int[] d = SKIN_DAY[i];
+        out.set(mix(d[0], SKIN_DARK, 0.52f * night), mix(d[1], SKIN_DARK, 0.52f * night), mix(d[2], SKIN_DARK, 0.58f * night));
     }
 
     /**
@@ -349,6 +380,12 @@ final class Shaders {
      */
     static void settings(Palette out) {
         out.set(0x08090C, 0x141519, 0x2B2838);
+    }
+
+    /** For a screen with no night state of its own (Settings, the screensaver): the theme's palette, if one is on. */
+    static void themed(Palette out, HomeData data) {
+        if (!Prefs.skinOn()) return;
+        skin(out, Prefs.skin(), data.isNight(System.currentTimeMillis()) ? 1 : 0);
     }
 
     private static int mix(int a, int b, float f) {

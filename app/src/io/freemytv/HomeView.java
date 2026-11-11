@@ -122,6 +122,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final String[] STATUS_SYMBOLS = {"wifi", "ethernet", "bluetooth", "usb"};
     private static final float L_PLATTER_TOP = 814, L_TILE_H = 126;
     private static final float L_DATE_BASE = 330, L_CLOCK_BASE = 540, L_WEATHER_BASE = 626, L_QUOTES_BASE = 694;
+    private static final float L_TOP_CLOCK_BASE = 168;
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
     private static String[] tabs;
     private static int tabsGeneration = -1;
@@ -254,7 +255,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private int shelfIndex;
     /** The first app the shelf shows: with more apps than fit, it scrolls with the focus. */
     private int shelfFirst;
-    private int recentVersion;   // Recent.version when the shelf was last put in "Last opened first" order
     private final int shelfVisible;
 
     // Moving shelf apps or top buttons: hold OK, then ← → move it, OK drops it, Back cancels. The
@@ -335,7 +335,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private float touchX, touchY;
     private final RectF hitBox = new RectF();   // the mouse's hit tests (menu rows, Continue Watching cards)
 
-    private Paint labelPaint, metaPaint, clockPaint, buttonPaint, capsuleText, tipPaint, quotePaint, staleQuote;
+    private Paint labelPaint, metaPaint, clockPaint, buttonPaint, capsuleText, tipPaint, quotePaint, staleQuote, lClockTop, lDateTop;
     private Paint rowTitle, drawerLabel, cardTitle, cardText, cardDim, cardDimRight, bigTemp, hourPaint, hourTemp, dayLow;
     private Paint pricePaint, changePaint, sheetTitle;
     private TextPaint titlePaint, gridLabel, toastPaint;
@@ -709,7 +709,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         playing.start();
         checkNotices();
         hiddenNow.retainAll(Prefs.watchHidden());   // Home Settings may have shown the hidden ones again
-        if (Prefs.shelfRecent()) reorderRecent();
         if (!again) reload();
         updatePalette();
         updatePicks();
@@ -718,10 +717,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             allAppsOnResume = false;
             reset(false);
             openSheet();
-        } else if (inputsOnResume) {
-            inputsOnResume = false;
-            reset(false);
-            openInputs();
         } else if (sheetOpen) {
             closeSheet();
         }
@@ -933,6 +928,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lDate = Ui.text(Ui.semibold, 34 * k, L_DIM);
         lClock = Ui.numbers(Ui.light, 200 * k, L_INK);
         lClock.setLetterSpacing(-0.01f);
+        lClockTop = Ui.numbers(Ui.displaySemibold, 118 * k, L_INK);
+        lClockTop.setLetterSpacing(-0.04f);
+        lDateTop = Ui.text(Ui.semibold, 38 * k, L_DIM);
         lWeather = Ui.text(Ui.medium, 34 * k, L_DIM);
         lClockQuote = Ui.numbers(Ui.medium, 28 * k, L_DIM);
         lightGradient = tintShade = null;
@@ -1171,9 +1169,67 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void updatePalette() {
         HomeData.Weather wx = data.weather;
-        Shaders.sky(scene.palette, System.currentTimeMillis(), wx.sunrise, wx.sunset);
+        boolean skin = Prefs.skinOn();
+        if (skin) {
+            Shaders.skin(scene.palette, Prefs.skin(), night);
+            inkDay = Shaders.skinInk(Prefs.skin());
+            dimDay = Ui.alpha(inkDay, 0.72f);
+            faintDay = Ui.alpha(inkDay, 0.55f);
+        } else {
+            Shaders.sky(scene.palette, System.currentTimeMillis(), wx.sunrise, wx.sunset);
+            inkDay = L_INK;
+            dimDay = L_DIM;
+            faintDay = L_FAINT;
+        }
+        if (skin != skinLayout) {
+            skinLayout = skin;
+            heroDirty = true;
+        }
         scene.applyPalette();
+        if (sky != null && skin) {
+            sky.invalidate();
+            platter.invalidate();
+            if (bgTo == null && bgFadeAt == 0 && !continueMode()) neutralGlass();   // the glass reads the new colors
+        }
     }
+
+    // The pastel theme's background: its base color and three soft blobs, like the mockup (drawn once into the sky layer).
+    private Shader[] skinBlobs;
+    private int skinBlobKey;
+
+    private int skinBase() {
+        return blend(blend(scene.palette.color(0), 0xFFFFFFFF, 0.5f * (1 - night)), 0xFF0D0A16, night);
+    }
+
+    private void drawSkin(Canvas c) {
+        float w = screen.width(), hh = screen.height();
+        int c0 = scene.palette.color(0), c1 = scene.palette.color(1), c2 = scene.palette.color(2);
+        int key = c0 * 31 + c1 * 17 + c2 + (int) w * 7 + (int) hh;
+        if (skinBlobs == null || key != skinBlobKey) {
+            skinBlobKey = key;
+            int[] col = {c0, c1, c2};
+            float[] cx = {0.148f * w, 0.89f * w, 0.584f * w}, cy = {0.208f * hh, 0.28f * hh, 1.03f * hh};
+            float[] r = {0.5625f * w, 0.516f * w, 0.52f * w};
+            skinBlobs = new Shader[3];
+            for (int i = 0; i < 3; i++) {
+                skinBlobs[i] = new android.graphics.RadialGradient(cx[i], cy[i], r[i],
+                        new int[] {col[i], Ui.alpha(col[i], 0.6f), Ui.alpha(col[i], 0f)}, new float[] {0f, 0.5f, 1f},
+                        Shader.TileMode.CLAMP);
+            }
+        }
+        fill.setShader(null);
+        fill.setColor(skinBase());
+        c.drawRect(screen, fill);
+        for (Shader blob : skinBlobs) {
+            fill.setShader(blob);
+            c.drawRect(screen, fill);
+        }
+        fill.setShader(null);
+    }
+
+    /** Pastel theme on: its text colors, and the clock at the top-left with the date beside it. */
+    private boolean skinLayout;
+    private int inkDay = L_INK, dimDay = L_DIM, faintDay = L_FAINT;
 
     // MARK: - Recommendations: hero and background
 
@@ -1309,6 +1365,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The plain background's colour at height y (0 = top, 1 = bottom), as drawLightSky draws it. */
     private int plainAt(float y, int card) {
+        if (skinLayout && !continueMode()) return blend(skinBase(), scene.palette.color(y > 0.6f ? 2 : 1), 0.5f);
         if (!continueMode()) return blend(0xFFEBEBF0, 0xFF141416, night);
         return blend(tintColor(card), 0xFF000000, 0.2f * y);   // under drawTint's shade
     }
@@ -1380,6 +1437,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         } else if (bgFadeAt == 0 && bgTo == null) {
             neutralGlass();
         }
+        if (skinLayout) updatePalette();    // the theme sinks into the dark as the night comes in
         heroDirty = statusDirty = tilesDirty = drawerDirty = true;
         sky.invalidate();
         platter.invalidate();
@@ -1401,18 +1459,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** Text colors for the current night value (dark by day, white at night). */
     private void applyTone() {
-        lTitle.setColor(tone(L_INK, WHITE));
-        lTab.setColor(tone(L_DIM, 0xFF8E8E93));
-        lTabOn.setColor(tone(L_INK, WHITE));
-        lCardTitle.setColor(tone(L_INK, WHITE));
-        lCardMeta.setColor(tone(L_DIM, 0xFF98989D));
-        lQuote.setColor(tone(L_FAINT, 0xB8FFFFFF));
-        lTip.setColor(tone(L_INK, WHITE));
-        lDate.setColor(tone(L_DIM, 0xFF98989D));
-        lClock.setColor(tone(L_INK, WHITE));
-        lWeather.setColor(tone(L_DIM, 0xFF98989D));
-        lClockQuote.setColor(tone(L_DIM, 0xFF98989D));
-        staleQuote.setColor(tone(L_FAINT, 0x99FFFFFF));
+        lTitle.setColor(tone(inkDay, WHITE));
+        lTab.setColor(tone(dimDay, 0xFF8E8E93));
+        lTabOn.setColor(tone(inkDay, WHITE));
+        lCardTitle.setColor(tone(inkDay, WHITE));
+        lCardMeta.setColor(tone(dimDay, 0xFF98989D));
+        lQuote.setColor(tone(faintDay, 0xB8FFFFFF));
+        lTip.setColor(tone(inkDay, WHITE));
+        lDate.setColor(tone(dimDay, 0xFF98989D));
+        lClock.setColor(tone(inkDay, WHITE));
+        lClockTop.setColor(tone(inkDay, WHITE));
+        lDateTop.setColor(tone(dimDay, 0xFF98989D));
+        lWeather.setColor(tone(dimDay, 0xFF98989D));
+        lClockQuote.setColor(tone(dimDay, 0xFF98989D));
+        staleQuote.setColor(tone(faintDay, 0x99FFFFFF));
         if (continueMode()) applyWatchContrast();
     }
 
@@ -1591,24 +1651,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     // MARK: - Quotes and shelf
-
-    /** "Last opened first": the app just left comes first, focused, before the screen shows (no file or package reads). */
-    private void reorderRecent() {
-        int v = Recent.version;
-        if (v == recentVersion || reordering || pendingOrderSaves > 0) return;   // a move being saved goes first
-        recentVersion = v;
-        showRecent(Recent.orderKnown(shelf));
-    }
-
-    /** The shelf in this order, focused on its first app (nothing changes when it's already so). */
-    private void showRecent(List<HomeApps.Item> ordered) {
-        boolean same = true;
-        for (int i = 0; same && i < ordered.size(); i++) same = ordered.get(i) == shelf.get(i);
-        if (same) return;
-        shelfIndex = 0;
-        shelfFirst = 0;
-        setShelf(ordered);
-    }
 
     private void setShelf(List<HomeApps.Item> list) {
         wake();
@@ -2475,29 +2517,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private boolean allAppsOnResume;
 
-    /** The remote's Input key (RemoteKeys, through HomeActivity): the drawer on the first input, as the top button. */
-    void showInputs() {
-        if (!running) {
-            inputsOnResume = true;
-            return;
-        }
-        reset(false);
-        openInputs();
-    }
-
-    private boolean inputsOnResume;
-
-    private void openInputs() {
-        openDrawer();
-        for (int i = 0; i < drawerItems.size(); i++) {
-            if (drawerItems.get(i).kind == HomeApps.INPUT) {
-                drawerIndex = i;
-                break;
-            }
-        }
-        retarget(false);
-    }
-
     private void openSheet() {
         sheetOpen = true;
         gridIndex = 0;
@@ -2702,12 +2721,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             appsGeneration = Ui.generation;
             appsAt = up;
         }
-        // Without a full reload, "Last opened first" still reads the list again: an app opened from the screensaver in
-        // another process (Android 11 to 12L) changed only the file.
-        final List<HomeApps.Item> from = !apps && Prefs.shelfRecent() ? shelf : null;
         LOADER.execute(() -> {
             final List<HomeApps.Item> s = apps ? HomeApps.shelf(c, true) : null;
-            final List<HomeApps.Item> recent = from != null ? Recent.order(c, from) : null;
             final List<HomeApps.Item> st = statusList(c);
             final List<HomeApps.Item> d = drawerList(c);
             final List<HomeApps.Item> o = apps ? HomeApps.others(c) : null;
@@ -2722,7 +2737,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 if (top != null && !keepOrder) setLightButtons(top);
                 setTopContent(mode, w, allowed);
                 if (s != null && !keepOrder) setShelf(s);
-                else if (s == null && recent != null && shelf == from && !keepOrder) showRecent(recent);
                 if (apps && keepOrder) appsStale = true;
                 setStatusItems(st);
                 setDrawerItems(d);
@@ -3354,7 +3368,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             return;
         }
         if (it.kind == HomeApps.INPUTS) {
-            openInputs();
+            openDrawer();
+            for (int i = 0; i < drawerItems.size(); i++) {
+                if (drawerItems.get(i).kind == HomeApps.INPUT) {
+                    drawerIndex = i;
+                    break;
+                }
+            }
+            retarget(false);
             return;
         }
         boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
@@ -3439,8 +3460,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private boolean canReorder() {
         if (sheetOpen || menuOpen) return false;
         if (zone == Z_TOP) return topIndex >= 3 && topIndex < 3 + lightButtons.size() && lightButtons.size() > 1;
-        // "Last opened first" places the shelf's apps itself
-        if (zone != Z_SHELF || shelfIndex >= shelf.size() || shelf.size() < 2 || Prefs.shelfRecent()) return false;
+        if (zone != Z_SHELF || shelfIndex >= shelf.size() || shelf.size() < 2) return false;
         HomeApps.Item it = shelf.get(shelfIndex);
         return it.kind == HomeApps.APP && it.pkg != null;
     }
@@ -4300,7 +4320,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (link != null && link.resolveActivity(activity.getPackageManager()) != null) {
             try {
                 activity.startActivity(link.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                Recent.note(activity, it.pkg);   // the shelf's "Last opened first" counts it too
                 return;
             } catch (ActivityNotFoundException | SecurityException e) {
                 AppLog.w("continue watching link: " + e.getMessage());
@@ -4342,7 +4361,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (launch == null) return false;
         try {
             activity.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            Recent.note(activity, it.pkg);
             return true;
         } catch (ActivityNotFoundException | SecurityException e) {
             AppLog.w("couldn't open " + it.pkg + ": " + e.getMessage());
@@ -4560,13 +4578,16 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (nightGradient == null) nightGradient = Ui.gradient(h, 0xFF1C1C1E, 0xFF0B0B0D);
             fill.setColorFilter(v);
             fill.setColor(0xFF000000);
-            if (continueMode()) {
+            boolean skinned = skinLayout && !continueMode();
+            if (skinned) {
+                drawSkin(c);
+            } else if (continueMode()) {
                 drawTint(c);
             } else if (night < 0.999f) {
                 fill.setShader(lightGradient);
                 c.drawRect(screen, fill);
             }
-            if (night > 0.001f && !continueMode()) {
+            if (night > 0.001f && !continueMode() && !skinned) {
                 fill.setShader(nightGradient);
                 fill.setAlpha(Math.round(255 * night));
                 c.drawRect(screen, fill);
@@ -4699,8 +4720,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawClock(Canvas c) {
         float x = MARGIN * k;
-        c.drawText(dateText, x - Ui.leftBearing(lDate, dateText), L_DATE_BASE * k, lDate);
-        c.drawText(clockText, x - Ui.leftBearing(lClock, clockText), L_CLOCK_BASE * k, lClock);
+        float weatherBase = L_WEATHER_BASE * k;
+        if (skinLayout) {
+            // Pastel theme: the time at the top-left, the date right beside it on the same line.
+            float base = L_TOP_CLOCK_BASE * k;
+            c.drawText(clockText, x - Ui.leftBearing(lClockTop, clockText), base, lClockTop);
+            c.drawText(dateText, x + lClockTop.measureText(clockText) + 30 * k, base, lDateTop);
+            weatherBase = base + 76 * k;
+        } else {
+            c.drawText(dateText, x - Ui.leftBearing(lDate, dateText), L_DATE_BASE * k, lDate);
+            c.drawText(clockText, x - Ui.leftBearing(lClock, clockText), L_CLOCK_BASE * k, lClock);
+        }
         HomeData.Weather wx = data.weather;
         if (!Prefs.weather() || Double.isNaN(wx.temp)) return;
         if (data.weatherAt != weatherLineAt || Prefs.version != weatherLinePrefs || !Ui.language.equals(weatherLineLanguage)) {
@@ -4710,7 +4740,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             weatherLine = HomeData.degrees(wx.temp) + "  " + HomeData.condition(wx.code, wx.isDay) + "   "
                     + HomeData.highLow(wx, "  ");
         }
-        float size = 40 * k, base = L_WEATHER_BASE * k;
+        float size = 40 * k, base = weatherBase;
         String symbol = Symbols.weather(wx.code, wx.isDay);
         float sw = Symbols.width(getContext(), symbol, size);
         Symbols.draw(getContext(), c, symbol, x + sw / 2, base - Ui.halfCap(lWeather), size, lWeather.getColor());

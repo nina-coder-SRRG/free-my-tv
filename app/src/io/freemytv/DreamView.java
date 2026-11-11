@@ -137,7 +137,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     private float k = 1;
     private long minute = -1;
     private String clock = "", date = "";
-    private Paint datePaint, clockPaint, weatherPaint, weatherDim, quotePaint, stalePaint;
+    private Paint datePaint, clockPaint, weatherPaint, weatherDim, quotePaint, stalePaint, skinClock, skinDate;
     private Paint cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, metaPaint, hintPaint;
     private TextPaint titlePaint;
 
@@ -164,6 +164,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             onData();
         });
         Shaders.dream(scene.palette);
+        Shaders.themed(scene.palette, data);    // the pastel theme's background, when one is on
         scene.setMotion(0.4f, 0.32f);
         scene.applyPalette();
         content.setUseCompositingLayer(true, null);
@@ -251,6 +252,11 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         clockPaint = Ui.numbers(Ui.thin, 280 * k, 0xF2FFFFFF);
         clockPaint.setTextAlign(Paint.Align.CENTER);
         clockPaint.setLetterSpacing(-0.01f);
+        skinClock = Ui.numbers(Ui.displaySemibold, 250 * k, 0xFF000000);
+        skinClock.setTextAlign(Paint.Align.CENTER);
+        skinClock.setLetterSpacing(-0.045f);
+        skinDate = Ui.text(Ui.semibold, 44 * k, 0xFF000000);
+        skinDate.setTextAlign(Paint.Align.CENTER);
         weatherPaint = Ui.numbers(Ui.medium, 30 * k, 0xC7FFFFFF);
         weatherDim = Ui.numbers(Ui.regular, 28 * k, 0x80FFFFFF);
         quotePaint = Ui.numbers(Ui.medium, 24 * k, 0x99FFFFFF);
@@ -284,6 +290,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     /** Your photos when they are on, otherwise the picks'. */
     private List<Recs.Pick> photos() {
+        if (Prefs.skinOn()) return java.util.Collections.emptyList();   // pastel theme: only its background and the clock
         return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
     }
 
@@ -846,13 +853,37 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         float cx = w / 2f;
         float clockCap = Ui.cap(clockPaint);
         float clockBase = h * 0.5f + clockCap / 2 - 10 * k;
-        c.drawText(date, cx, clockBase - clockCap - 34 * k, datePaint);
-        c.drawText(clock, cx, clockBase, clockPaint);
+        boolean skin = Prefs.skinOn();
+        int ink = 0xC7FFFFFF;
+        float weatherBase = clockBase + 76 * k;
+        if (skin) {
+            // Pastel theme: the big time in the middle, the date right under it, in the theme's ink (white at night).
+            int base = data.isNight(System.currentTimeMillis()) ? 0xFFF8F3FB : Shaders.skinInk(Prefs.skin());
+            skinClock.setColor(base);
+            skinDate.setColor(Ui.alpha(base, 0.78f));
+            weatherPaint.setColor(Ui.alpha(base, 0.8f));
+            weatherDim.setColor(Ui.alpha(base, 0.55f));
+            quotePaint.setColor(Ui.alpha(base, 0.6f));
+            stalePaint.setColor(Ui.alpha(base, 0.4f));
+            ink = Ui.alpha(base, 0.8f);
+            float cap = Ui.cap(skinClock);
+            float top = h * 0.5f + cap / 2 - 36 * k;
+            c.drawText(clock, cx, top, skinClock);
+            c.drawText(date, cx, top + 84 * k, skinDate);
+            weatherBase = top + 84 * k + 70 * k;
+        } else {
+            weatherPaint.setColor(0xC7FFFFFF);
+            weatherDim.setColor(0x80FFFFFF);
+            quotePaint.setColor(0x99FFFFFF);
+            stalePaint.setColor(0x59FFFFFF);
+            c.drawText(date, cx, clockBase - clockCap - 34 * k, datePaint);
+            c.drawText(clock, cx, clockBase, clockPaint);
+        }
 
         // Weather: symbol, temperature, high and low, centered under the clock.
         HomeData.Weather wx = data.weather;
         if (!Double.isNaN(wx.temp) && Prefs.weather()) {
-            float base = clockBase + 76 * k;
+            float base = weatherBase;
             String symbol = Symbols.weather(wx.code, wx.isDay);
             String now = HomeData.degrees(wx.temp);
             if (wx != rangeWeather || Ui.generation != rangeGeneration || Prefs.version != rangePrefs) {
@@ -864,7 +895,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             float sw = Symbols.width(getContext(), symbol, 32 * k);
             float width = sw + 12 * k + weatherPaint.measureText(now) + 18 * k + weatherDim.measureText(range);
             float x = cx - width / 2;
-            Symbols.draw(getContext(), c, symbol, x + sw / 2, base - Ui.halfCap(weatherPaint), 32 * k, 0xC7FFFFFF);
+            Symbols.draw(getContext(), c, symbol, x + sw / 2, base - Ui.halfCap(weatherPaint), 32 * k, ink);
             x += sw + 12 * k;
             c.drawText(now, x, base, weatherPaint);
             x += weatherPaint.measureText(now) + 18 * k;
@@ -887,7 +918,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         float x = cx - total / 2, base = h - 92 * k;
         for (int i = 0; i < values.length; i++) {
             float gw = Glyphs.width(getContext(), HomeData.COINS[coins[i]], cap);
-            Glyphs.coin(getContext(), c, HomeData.COINS[coins[i]], x + gw / 2, base - cap / 2, cap, 0x80FFFFFF);
+            Glyphs.coin(getContext(), c, HomeData.COINS[coins[i]], x + gw / 2, base - cap / 2, cap, skin ? quotePaint.getColor() : 0x80FFFFFF);
             x += gw + gap;
             c.drawText(values[i], x, base, quotePaint);
             x += quotePaint.measureText(values[i]) + spacing;

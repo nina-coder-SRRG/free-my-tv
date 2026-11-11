@@ -90,15 +90,6 @@ final class Prefs {
     /** Google TV Streamer's Vendor_18d1_Product_9451.kl; MACRO_1 (313) was added in API 34. */
     static final int KEY_GOOGLE_YOUTUBE = KeyEvent.KEYCODE_BUTTON_3, KEY_GOOGLE_NETFLIX = KeyEvent.KEYCODE_BUTTON_4,
             KEY_GOOGLE_CUSTOM = 313;
-    /**
-     * The onn remote (Vendor_0957_Product_0031.kl; onn 4K Pro, Google TV 14): HID usages 0x77 to 0x7A. YouTube goes to
-     * launcherx (off in our mode); Netflix, Disney+ and Paramount+ to droidlogic's and gretzky's receivers. Free TV is
-     * usage 0x187, KEYCODE_FEATURED_APP_1 (297, public since API 33: a number here, since minSdk is 26), also for
-     * launcherx: without the filter it does nothing in our mode.
-     */
-    static final int KEY_ONN_YOUTUBE = KeyEvent.KEYCODE_BUTTON_3, KEY_ONN_NETFLIX = KeyEvent.KEYCODE_BUTTON_4,
-            KEY_ONN_DISNEY = KeyEvent.KEYCODE_BUTTON_9, KEY_ONN_PARAMOUNT = KeyEvent.KEYCODE_BUTTON_10,
-            KEY_ONN_FREE_TV = 297;
     /** A button's value that opens this home screen's All Apps. */
     static final String ALL_APPS = HomeMode.PKG + "#all";
     /**
@@ -109,11 +100,8 @@ final class Prefs {
     static final int KEY_JVC_SHORTCUT = 200_383, KEY_JVC_SETTINGS = KeyEvent.KEYCODE_NOTIFICATION;
     static final String TV_SHORTCUTS = HomeMode.PKG + "#tvshortcuts";
     static final String QUICK_SETTINGS = HomeMode.PKG + "#quicksettings";
-    static final int[] KEYS = RemoteKeys.CHROMECAST_SABRINA ? new int[] {SabrinaRemote.KEY_YOUTUBE}
-            : RemoteKeys.GOOGLE_STREAMER
+    static final int[] KEYS = RemoteKeys.GOOGLE_STREAMER
             ? new int[] {KEY_GOOGLE_YOUTUBE, KEY_GOOGLE_NETFLIX, KEY_GOOGLE_CUSTOM}
-            : RemoteKeys.ONN ? new int[] {KEY_ONN_YOUTUBE, KEY_ONN_NETFLIX, KEY_ONN_DISNEY, KEY_ONN_PARAMOUNT,
-                    KEY_ONN_FREE_TV}
             : RemoteKeys.JVC_SKYWORTH ? new int[] {KEY_JVC_SHORTCUT, KEY_JVC_SETTINGS}
             : RemoteKeys.PHILIPS_GTV ? new int[] {KEY_PHILIPS_SETTINGS, KEY_PHILIPS_APPS, KEY_PHILIPS_GUIDE, KEY_PHILIPS_NETFLIX,
                     KEY_PHILIPS_YOUTUBE, KEY_PHILIPS_PRIME}
@@ -290,6 +278,16 @@ final class Prefs {
 
     static void setTheme(String v) { put("theme", v); }
 
+    /** Pastel look of the background, the screensaver and Settings: "crepuscule" (default), "aurore", "brume", "opale", or "classic" (the original sky). */
+    static String skin() {
+        String v = sp().getString("skin", "crepuscule");
+        return Shaders.skinIndex(v) >= 0 ? v : "classic";
+    }
+
+    static void setSkin(String v) { put("skin", v); }
+
+    static boolean skinOn() { return Shaders.skinIndex(skin()) >= 0; }
+
     /** Wi-Fi/Ethernet, Bluetooth and USB icons at the top-left of the home screen. */
     static boolean statusIcons() { return sp().getBoolean("statusicons", false); }
     static void setStatusIcons(boolean on) { put("statusicons", on); }
@@ -442,10 +440,6 @@ final class Prefs {
         put("shelf", sb.toString());
     }
 
-    /** The shelf puts the app last opened from Free My TV first (Recent) instead of keeping the order set in Settings > Shelf. */
-    static boolean shelfRecent() { return sp().getBoolean("shelfRecent", false); }
-    static void setShelfRecent(boolean on) { put("shelfRecent", on); }
-
     // MARK: - Sleep timer
 
     /** When the sleep timer ends (System.currentTimeMillis); SleepTimer's alarm says whether it's still on. */
@@ -492,15 +486,8 @@ final class Prefs {
     // MARK: - Remote buttons
 
     private static String defaultApp(int keyCode) {
-        if (RemoteKeys.CHROMECAST_SABRINA) {
-            return keyCode == SabrinaRemote.KEY_YOUTUBE ? "com.google.android.youtube.tv" : "";
-        }
         if (RemoteKeys.GOOGLE_STREAMER) {
             return keyCode == KEY_GOOGLE_YOUTUBE ? "com.google.android.youtube.tv" : "";
-        }
-        if (RemoteKeys.ONN) {
-            // YouTube's receiver (launcherx) is off in our mode; the others keep opening their apps until one is picked.
-            return keyCode == KEY_ONN_YOUTUBE ? "com.google.android.youtube.tv" : "";
         }
         if (RemoteKeys.JVC_SKYWORTH) {
             if (keyCode == KEY_JVC_SHORTCUT) return TV_SHORTCUTS;
