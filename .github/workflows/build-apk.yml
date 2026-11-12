@@ -33,7 +33,10 @@ jobs:
           KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
         run: |
           if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASS" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nina.keystore"
+            echo "Taille du secret KEYSTORE_B64 : $(printf %s "$KEYSTORE_B64" | wc -c) caractères (attendu : 3452)"
+            echo "Taille du secret KEYSTORE_PASS : $(printf %s "$KEYSTORE_PASS" | wc -c) caractères (attendu : 21)"
+            printf %s "$KEYSTORE_B64" | tr -d ' \r\n\t' | base64 -d > "$RUNNER_TEMP/nina.keystore" \
+              || { echo "ERREUR : le secret KEYSTORE_B64 est mal copié (incomplet ou avec du texte en trop)."; exit 1; }
             echo "FREEMYTV_KEYSTORE=$RUNNER_TEMP/nina.keystore" >> "$GITHUB_ENV"
             echo "FREEMYTV_KEYSTORE_PASS=$KEYSTORE_PASS" >> "$GITHUB_ENV"
             echo "Clé fixe trouvée : l'APK sera signé avec."
