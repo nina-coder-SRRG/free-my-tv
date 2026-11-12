@@ -345,6 +345,9 @@ final class Shaders {
     // MARK: - Pastel themes (Home Settings > Theme)
 
     static final String[] SKINS = {"crepuscule", "aurore", "brume", "opale"};
+    /** One of a look's three pastel stops (0xRRGGBB, no alpha), for the look panel's swatches. */
+    static int skinStop(int skin, int stop) { return SKIN_DAY[skin][stop]; }
+
     static final String[] SKIN_NAMES = {"Crépuscule", "Aurore", "Brume", "Opale"};
     private static final int[][] SKIN_DAY = {
         {0xFFC8B0, 0xB9A6F0, 0x9CC5F5},

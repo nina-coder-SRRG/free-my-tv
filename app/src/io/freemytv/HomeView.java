@@ -210,7 +210,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // Holding OK on a card: a small menu (hide it, open the app, cancel) on its own layer, drawn only while it shows.
     private static final float MENU_W = 720, MENU_PAD = 44, MENU_INSET = 16, MENU_ROW = 76, MENU_STEP = 80, MENU_R = 36;
     private final Spring menu = new Spring(0.26f, 0.86f, 0), menuPick = new Spring(0.22f, 0.9f, 0);
-    private static final int MENU_MAX = 8;
+    private static final int MENU_MAX = 10;
     private final String[] menuOptions = new String[MENU_MAX];
     private final String[] menuValues = new String[MENU_MAX];
     private final boolean[] menuChecks = new boolean[MENU_MAX];
@@ -224,7 +224,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private WatchNext.Item menuItem;
     private String menuTitle = "", menuSub = "";
     private float menuOptionsTop;
-    private Paint menuTitlePaint, menuSubPaint, menuOptionPaint;
+    private Paint menuTitlePaint, menuSubPaint, menuOptionPaint, palLabel, palText, palSmall;
+    private final RectF[] palCells = new RectF[MENU_MAX];
+    private final float[] palLabelY = new float[3];
+    private android.graphics.Shader[] palSwatch = new android.graphics.Shader[4];
     private final RectF[] cardRects = new RectF[Recs.MAX_CARDS];
     private final List<HomeApps.Item> lightButtons = new ArrayList<>();
     private Paint lTitle, lTab, lTabOn, lCardTitle, lCardMeta, lQuote, lTip, lDate, lClock, lWeather, lClockQuote;
@@ -1001,6 +1004,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         menuTitlePaint = Ui.text(Ui.semibold, 34 * k, L_INK);
         menuSubPaint = Ui.text(Ui.medium, 25 * k, L_DIM);
         menuOptionPaint = Ui.text(Ui.medium, 30 * k, L_INK);
+        palLabel = Ui.text(Ui.semibold, 22 * k, L_DIM);
+        palLabel.setLetterSpacing(0.08f);
+        palText = Ui.text(Ui.semibold, 28 * k, L_INK);
+        palSmall = Ui.text(Ui.semibold, 24 * k, L_INK);
+        for (int i = 0; i < MENU_MAX; i++) palCells[i] = new RectF();
         if (menuOpen) layoutMenu();
         shadow.setMaskFilter(new BlurMaskFilter(SHADOW_BLUR * k, BlurMaskFilter.Blur.NORMAL));
         shadowSoft.setMaskFilter(new BlurMaskFilter(12 * k, BlurMaskFilter.Blur.NORMAL));
@@ -4501,6 +4509,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The panel, centered on the screen: title, the app's name (if known) and the three options. */
     private void layoutMenu() {
+        if (paletteMenu) {
+            layoutPalette();
+            return;
+        }
         float rows = (MENU_PAD + 34 + (menuSub.isEmpty() ? 0 : 38) + 32 + (menuCount - 1) * MENU_STEP + MENU_ROW + MENU_INSET) * k;
         float left = (w - MENU_W * k) / 2, top = (h - rows) / 2;
         menuPanel.set(left, top, left + MENU_W * k, top + rows);
@@ -4508,6 +4520,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void menuRow(int i, RectF out) {
+        if (paletteMenu) {
+            out.set(palCells[i]);
+            return;
+        }
         float y = menuOptionsTop + i * MENU_STEP * k;
         out.set(menuPanel.left + MENU_INSET * k, y, menuPanel.right - MENU_INSET * k, y + MENU_ROW * k);
     }
@@ -4528,6 +4544,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private boolean menuKey(KeyEvent e) {
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
+        if (paletteMenu) {
+            switch (e.getKeyCode()) {
+                case KeyEvent.KEYCODE_DPAD_UP: if (down) movePalette(-1, 0); return true;
+                case KeyEvent.KEYCODE_DPAD_DOWN: if (down) movePalette(1, 0); return true;
+                case KeyEvent.KEYCODE_DPAD_LEFT: if (down) movePalette(0, -1); return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT: if (down) movePalette(0, 1); return true;
+                default: break;
+            }
+        }
         switch (e.getKeyCode()) {
             case KeyEvent.KEYCODE_DPAD_UP:
                 if (down) moveMenu(-1);
@@ -4632,6 +4657,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         c.drawRoundRect(menuPanel, r, r, fill);
         border.setColor(Ui.alpha(tone(0x14000000, 0x1FFFFFFF), a));
         c.drawRoundRect(menuPanel, r, r, border);
+        if (paletteMenu) {
+            drawPaletteCells(c, a);
+            c.restore();
+            return;
+        }
         float x = menuPanel.left + MENU_PAD * k, y = menuPanel.top + (MENU_PAD + 34) * k;
         menuTitlePaint.setColor(Ui.alpha(tone(L_INK, WHITE), a));
         c.drawText(menuTitle, x, y, menuTitlePaint);
@@ -4677,7 +4707,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         menuItem = null;
         menuTitle = Ui.tr("Look");
         menuSub = "";
-        menuCount = 8;
+        menuCount = 10;
         fillPalette();
         layoutMenu();
         menuOpen = true;
@@ -4691,37 +4721,37 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         spoken.focusMoved();
     }
 
-    /** The panel's rows from the current settings: four looks, the mode, then the three cards. */
+    /** The panel's cells from the current settings: four looks, three modes, three cards. */
     private void fillPalette() {
-        String look = Prefs.skin();
+        String look = Prefs.skin(), theme = Prefs.theme();
         for (int i = 0; i < 4; i++) {
             menuOptions[i] = Shaders.SKIN_NAMES[i];
             menuChecks[i] = Shaders.SKINS[i].equals(look);
-            menuValues[i] = null;
         }
-        String theme = Prefs.theme();
-        menuOptions[4] = Ui.tr("Mode");
-        menuChecks[4] = false;
-        menuValues[4] = theme.equals("light") ? Ui.tr("Light") : theme.equals("dark") ? Ui.tr("Dark") : Ui.tr("Automatic");
-        menuOptions[5] = Ui.tr("Weather");
-        menuChecks[5] = Prefs.weather();
-        menuOptions[6] = Ui.tr("Calendar");
-        menuChecks[6] = Prefs.calendarCard();
-        menuOptions[7] = Ui.tr("Countdown");
-        menuChecks[7] = Prefs.countdownCard();
-        for (int i = 5; i < 8; i++) menuValues[i] = null;
+        menuOptions[4] = Ui.tr("Automatic");
+        menuChecks[4] = theme.equals("auto");
+        menuOptions[5] = Ui.tr("Light");
+        menuChecks[5] = theme.equals("light");
+        menuOptions[6] = Ui.tr("Dark");
+        menuChecks[6] = theme.equals("dark");
+        menuOptions[7] = Ui.tr("Weather");
+        menuChecks[7] = Prefs.weather();
+        menuOptions[8] = Ui.tr("Calendar");
+        menuChecks[8] = Prefs.calendarCard();
+        menuOptions[9] = Ui.tr("Countdown");
+        menuChecks[9] = Prefs.countdownCard();
+        for (int i = 0; i < MENU_MAX; i++) menuValues[i] = null;
     }
 
     private void pickPalette() {
         int i = menuIndex;
         if (i < 4) {
             Prefs.setSkin(Shaders.SKINS[i]);
-        } else if (i == 4) {
-            String theme = Prefs.theme();
-            Prefs.setTheme(theme.equals("auto") ? "light" : theme.equals("light") ? "dark" : "auto");
-        } else if (i == 5) {
+        } else if (i < 7) {
+            Prefs.setTheme(i == 4 ? "auto" : i == 5 ? "light" : "dark");
+        } else if (i == 7) {
             Prefs.setWeather(!Prefs.weather());
-        } else if (i == 6) {
+        } else if (i == 8) {
             Prefs.setCalendarCard(!Prefs.calendarCard());
         } else {
             Prefs.setCountdownCard(!Prefs.countdownCard());
@@ -4735,6 +4765,137 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         platter.invalidate();
         menuLayer.invalidate();
         wake();
+    }
+
+    private static final int[] PAL_ROW_WIDTH = {2, 2, 3, 3};
+
+    private static int palRow(int i) { return i < 2 ? 0 : i < 4 ? 1 : i < 7 ? 2 : 3; }
+
+    private static int palCol(int i) { return i < 4 ? i % 2 : i < 7 ? i - 4 : i - 7; }
+
+    private static int palIndex(int row, int col) {
+        int c = Math.max(0, Math.min(PAL_ROW_WIDTH[row] - 1, col));
+        return row == 0 ? c : row == 1 ? 2 + c : row == 2 ? 4 + c : 7 + c;
+    }
+
+    /** The arrows move over the panel's grid; going to a row of another width keeps the same place from left to right. */
+    private void movePalette(int dRow, int dCol) {
+        int row = palRow(menuIndex), col = palCol(menuIndex), next;
+        if (dCol != 0) {
+            next = palIndex(row, col + dCol);
+        } else {
+            int nr = Math.max(0, Math.min(3, row + dRow));
+            if (nr == row) return;
+            int from = PAL_ROW_WIDTH[row], to = PAL_ROW_WIDTH[nr];
+            int mapped = from == 1 ? 0 : Math.round(col * (to - 1f) / (from - 1f));
+            next = palIndex(nr, mapped);
+        }
+        if (next == menuIndex) return;
+        menuIndex = next;
+        menuPick.snap(next);
+        menuLayer.invalidate();
+        wake();
+        click.move();
+        spoken.focusMoved();
+    }
+
+    private static final float PAL_W = 960, PAL_PAD = 44, PAL_GAP = 16;
+
+    /** The panel and its cells, centered: Look (2 x 2), Mode (3 in a row), Cards (3 in a row). */
+    private void layoutPalette() {
+        float inner = PAL_W - 2 * PAL_PAD, half = (inner - PAL_GAP) / 2, third = (inner - 2 * PAL_GAP) / 3;
+        float height = PAL_PAD + 40 + 84 * 2 + 14 + 30 + 40 + 76 + 30 + 40 + 76 + PAL_PAD;
+        float left = (w - PAL_W * k) / 2, top = (h - height * k) / 2;
+        menuPanel.set(left, top, left + PAL_W * k, top + height * k);
+        float x0 = left + PAL_PAD * k, y = top + PAL_PAD * k;
+        palLabelY[0] = y + 22 * k;
+        y += 40 * k;
+        for (int i = 0; i < 4; i++) {
+            float x = x0 + (i % 2) * (half + PAL_GAP) * k, yy = y + (i / 2) * 98 * k;
+            palCells[i].set(x, yy, x + half * k, yy + 84 * k);
+        }
+        y += (84 * 2 + 14 + 30) * k;
+        palLabelY[1] = y + 22 * k;
+        y += 40 * k;
+        for (int i = 0; i < 3; i++) {
+            float x = x0 + i * (third + PAL_GAP) * k;
+            palCells[4 + i].set(x, y, x + third * k, y + 76 * k);
+        }
+        y += (76 + 30) * k;
+        palLabelY[2] = y + 22 * k;
+        y += 40 * k;
+        for (int i = 0; i < 3; i++) {
+            float x = x0 + i * (third + PAL_GAP) * k;
+            palCells[7 + i].set(x, y, x + third * k, y + 76 * k);
+        }
+        for (int i = 0; i < 4; i++) {
+            float cx = palCells[i].left + 54 * k, cy = palCells[i].centerY(), r = 28 * k;
+            palSwatch[i] = new android.graphics.LinearGradient(cx - r, cy - r, cx + r, cy + r,
+                    new int[] {0xFF000000 | Shaders.skinStop(i, 0), 0xFF000000 | Shaders.skinStop(i, 1), 0xFF000000 | Shaders.skinStop(i, 2)},
+                    new float[] {0f, 0.6f, 1f}, Shader.TileMode.CLAMP);
+        }
+    }
+
+    /** The cells, inside the panel the menu already drew (a = how far the panel has faded in). */
+    private void drawPaletteCells(Canvas c, float a) {
+        int ink = tone(L_INK, WHITE), onPill = tone(WHITE, L_INK), dim = tone(L_DIM, 0xFF98989D);
+        int accent = widgetAccent();
+        String[] labels = {Ui.tr("Theme"), Ui.tr("Mode"), Ui.tr("Widgets")};
+        palLabel.setColor(Ui.alpha(dim, a));
+        for (int s = 0; s < 3; s++) {
+            c.drawText(labels[s].toUpperCase(Ui.locale()), menuPanel.left + PAL_PAD * k, palLabelY[s], palLabel);
+        }
+        float rr = 26 * k;
+        for (int i = 0; i < 10; i++) {
+            RectF r = palCells[i];
+            boolean focus = i == menuIndex, on = menuChecks[i], widget = i >= 7;
+            fill.setShader(null);
+            fill.setColor(Ui.alpha(focus ? ink : on && !widget ? Ui.alpha(accent, 0.16f) : tone(0x0F000000, 0x1FFFFFFF), a));
+            c.drawRoundRect(r, rr, rr, fill);
+            if (on && !widget && !focus) {
+                border.setColor(Ui.alpha(accent, a));
+                float was = border.getStrokeWidth();
+                border.setStrokeWidth(3 * k);
+                c.drawRoundRect(r, rr, rr, border);
+                border.setStrokeWidth(was);
+            }
+            int text = Ui.alpha(focus ? onPill : ink, a);
+            if (i < 4) {
+                float cx = r.left + 54 * k, cy = r.centerY(), rad = 28 * k;
+                fill.setShader(palSwatch[i]);
+                fill.setAlpha(Math.round(255 * a));
+                c.drawCircle(cx, cy, rad, fill);
+                fill.setShader(null);
+                fill.setAlpha(255);
+                border.setColor(Ui.alpha(0xFFFFFFFF, a));
+                float was = border.getStrokeWidth();
+                border.setStrokeWidth(2.5f * k);
+                c.drawCircle(cx, cy, rad, border);
+                border.setStrokeWidth(was);
+                palText.setColor(text);
+                c.drawText(menuOptions[i], cx + rad + 20 * k, cy + Ui.halfCap(palText), palText);
+            } else if (i < 7) {
+                palText.setColor(text);
+                palText.setTextAlign(Paint.Align.CENTER);
+                c.drawText(menuOptions[i], r.centerX(), r.centerY() + Ui.halfCap(palText), palText);
+                palText.setTextAlign(Paint.Align.LEFT);
+            } else {
+                palSmall.setColor(text);
+                c.drawText(menuOptions[i], r.left + 24 * k, r.centerY() + Ui.halfCap(palSmall), palSmall);
+                float cx = r.right - 36 * k, cy = r.centerY(), rad = 15 * k;
+                if (on) {
+                    fill.setColor(Ui.alpha(focus ? onPill : accent, a));
+                    c.drawCircle(cx, cy, rad, fill);
+                    Symbols.draw(getContext(), c, "check", cx, cy, 22 * k, Ui.alpha(focus ? ink : 0xFFFFFFFF, a));
+                } else {
+                    border.setColor(Ui.alpha(focus ? onPill : dim, a));
+                    float was = border.getStrokeWidth();
+                    border.setStrokeWidth(2.5f * k);
+                    c.drawCircle(cx, cy, rad - 1.2f * k, border);
+                    border.setStrokeWidth(was);
+                }
+            }
+        }
     }
 
     private void selectTab(int index) {
