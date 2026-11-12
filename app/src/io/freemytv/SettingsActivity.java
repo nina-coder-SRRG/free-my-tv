@@ -1020,7 +1020,21 @@ public class SettingsActivity extends Activity {
             if (screen == HOME_SETTINGS && pickScroll + focus == TOP_ROW && row != TOP_ROW) commitWatch();
         }
 
+        /** Up and down on the first tab follow the drawn order (Countdowns sits before Sleep Timer). */
+        private int mainStep(int f, int dir) {
+            int[] rowOf = {1, 2, 3, 4, 5, 8, 6, 7};
+            int slot = f == 0 ? -1 : slotOf(f);
+            slot = Math.max(-1, Math.min(rowOf.length - 1, slot + dir));
+            return slot < 0 ? 0 : rowOf[slot];
+        }
+
         private void wheel(int dir) {
+            if (screen == MAIN && tab == 0) {
+                focus = mainStep(focus, dir > 0 ? 1 : -1);
+                invalidate();
+                spoken.focusMoved();
+                return;
+            }
             int before = pickScroll + focus;
             if (scrolling()) {
                 if (dir > 0 && pickScroll + rowCount() < listSize()) pickScroll++;
@@ -1040,14 +1054,16 @@ public class SettingsActivity extends Activity {
             switch (e.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_UP:
                     if (down && screen == HOME_SETTINGS && pickScroll + focus == TOP_ROW) commitWatch();
-                    if (down && focus > 0) focus--;
+                    if (down && screen == MAIN && tab == 0) focus = mainStep(focus, -1);
+                    else if (down && focus > 0) focus--;
                     else if (down && scrolling() && pickScroll > 0) pickScroll--;
                     invalidate();
                     spoken.focusMoved();
                     return true;
                 case KeyEvent.KEYCODE_DPAD_DOWN:
                     if (down && screen == HOME_SETTINGS && pickScroll + focus == TOP_ROW) commitWatch();
-                    if (down && focus < rowCount() - 1) focus++;
+                    if (down && screen == MAIN && tab == 0) focus = mainStep(focus, 1);
+                    else if (down && focus < rowCount() - 1) focus++;
                     else if (down && scrolling() && pickScroll + rowCount() < listSize()) pickScroll++;
                     invalidate();
                     spoken.focusMoved();
@@ -1058,13 +1074,7 @@ public class SettingsActivity extends Activity {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                         spoken.focusMoved();   // TalkBack reads the new value or place
                     } else if (down && screen == MAIN && focus == 0) {
-                        // The slider: → Original, ← Free My TV.
-                        boolean toOriginal = e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT;
-                        if (!busy() && toOriginal == freeActive()) {
-                            requestedAt = HomeMode.request(getContext(), toOriginal ? HomeMode.ORIGINAL : HomeMode.FREE);
-                            pendingAt = SystemClock.uptimeMillis();
-                            stalled = false;
-                        }
+                        // The home screen switch: only OK acts on it, the arrows leave it alone.
                     } else if (down && screen == MAIN) {
                         int next = Math.max(0, Math.min(2, tab + (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
                         if (next != tab) {
@@ -2792,10 +2802,8 @@ public class SettingsActivity extends Activity {
                 return;
             } else if (focus == 0) {
                 if (busy()) return;
-                // The slider: OK moves it to the other home screen.
-                requestedAt = HomeMode.request(c, freeActive() ? HomeMode.ORIGINAL : HomeMode.FREE);
-                pendingAt = SystemClock.uptimeMillis();
-                stalled = false;
+                screen = HOME_CHOICE;
+                focus = freeActive() ? 0 : 1;
             } else if (focus == 1 && tab != 0) {
                 return;   // the tab bar: the arrows change the tab
             } else if (focus == 8) {
