@@ -157,7 +157,10 @@ public class SettingsActivity extends Activity {
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_GAP = 8, CHOICE_H = 104;
         // The main menu: eight rows, then the comparison, the picks (with the Watchmode credit) and two notices, all on
         // one 1080 px screen: the rows share the 462 px that seven took.
-        private static final float MAIN_TOP = 140, ROW_H = 53.75f, MAIN_GAP = 4;
+        private static final float MAIN_TOP = 262, ROW_H = 62, MAIN_GAP = 6;
+        // Left card: the segmented switch between Free My TV and the original home screen.
+        private static final float SEG_L = 190, SEG_R = 810, SEG_T = 640, SEG_B = 724;
+        private int tab;   // 0 Settings, 1 Performance, 2 Good to know
         private static final int AMBER = 0xFFFFC266, INK = 0xFF1C1C1E;
 
         private final SettingsActivity activity;
@@ -396,7 +399,15 @@ public class SettingsActivity extends Activity {
         private RectF rowBox(int row) {
             float top, height;
             if (screen == MAIN) {
-                top = MAIN_TOP + row * (ROW_H + MAIN_GAP);
+                if (row == 0) {
+                    focusBox.set(SEG_L * k, SEG_T * k, SEG_R * k, SEG_B * k);
+                    return focusBox;
+                }
+                if (tab != 0) {
+                    focusBox.setEmpty();
+                    return focusBox;
+                }
+                top = MAIN_TOP + (row - 1) * (ROW_H + MAIN_GAP);
                 height = ROW_H;
             } else if (screen == HOME_CHOICE) {
                 top = LIST_TOP + 20 + row * (CHOICE_H + ROW_GAP);
@@ -463,24 +474,24 @@ public class SettingsActivity extends Activity {
             glassRim.setColor(0x59FFFFFF);
             iconBox = new Paint(Paint.ANTI_ALIAS_FLAG);
             iconBox.setColor(0x2EFFFFFF);
-            title = Ui.text(Ui.displaySemibold, 50 * k, 0xFFFFFFFF);
+            title = Ui.text(Ui.displaySemibold, 50 * k, fg(0xFF));
             title.setTextAlign(Paint.Align.CENTER);
-            subtitle = Ui.text(Ui.regular, 26 * k, 0x99FFFFFF);
+            subtitle = Ui.text(Ui.regular, 26 * k, fg(0x99));
             subtitle.setTextAlign(Paint.Align.CENTER);
-            version = Ui.text(Ui.regular, 22 * k, 0x66FFFFFF);
+            version = Ui.text(Ui.regular, 22 * k, fg(0x66));
             version.setTextAlign(Paint.Align.CENTER);
-            rowLabel = Ui.text(Ui.medium, 30 * k, 0xF2FFFFFF);
-            rowValue = Ui.text(Ui.regular, 28 * k, 0x8CFFFFFF);
+            rowLabel = Ui.text(Ui.medium, 30 * k, fg(0xF2));
+            rowValue = Ui.text(Ui.regular, 28 * k, fg(0x8C));
             rowValue.setTextAlign(Paint.Align.RIGHT);
             rowValueFit = new TextPaint(rowValue);
-            rowSub = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
-            header = Ui.text(Ui.semibold, 21 * k, 0x73FFFFFF);
+            rowSub = Ui.text(Ui.regular, 23 * k, fg(0x8C));
+            header = Ui.text(Ui.semibold, 21 * k, fg(0x73));
             header.setLetterSpacing(0.06f);
-            cellLabel = Ui.text(Ui.regular, 25 * k, 0xD9FFFFFF);
-            cellValue = Ui.numbers(Ui.regular, 25 * k, 0xD9FFFFFF);
+            cellLabel = Ui.text(Ui.regular, 25 * k, fg(0xD9));
+            cellValue = Ui.numbers(Ui.regular, 25 * k, fg(0xD9));
             cellValue.setTextAlign(Paint.Align.RIGHT);
-            warn = Ui.text(Ui.regular, 23 * k, AMBER);
-            notice = new TextPaint(Ui.text(Ui.regular, 23 * k, 0xB3FFFFFF));
+            warn = Ui.text(Ui.regular, 23 * k, light ? 0xFFA85A00 : AMBER);
+            notice = new TextPaint(Ui.text(Ui.regular, 23 * k, fg(0xB3)));
             spinner = new Paint(Paint.ANTI_ALIAS_FLAG);
             spinner.setStyle(Paint.Style.STROKE);
             spinner.setStrokeCap(Paint.Cap.ROUND);
@@ -489,8 +500,8 @@ public class SettingsActivity extends Activity {
             white.setColor(0xFFF5F5F7);
             shadow = new Paint(Paint.ANTI_ALIAS_FLAG);
             shadow.setMaskFilter(new BlurMaskFilter(22 * k, BlurMaskFilter.Blur.NORMAL));
-            keyHeading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
-            keyUrl = Ui.text(Ui.medium, 27 * k, 0xF2FFFFFF);
+            keyHeading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
+            keyUrl = Ui.text(Ui.medium, 27 * k, fg(0xF2));
             qrPaint = new Paint();   // no filtering: each module stays a sharp square
             qrPaint.setFilterBitmap(false);
             qrSlot = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -544,7 +555,7 @@ public class SettingsActivity extends Activity {
 
         private int rowCount() {
             switch (screen) {
-                case MAIN: return 8;
+                case MAIN: return tab == 0 ? 8 : 1;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingLabels().length);
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
@@ -584,11 +595,18 @@ public class SettingsActivity extends Activity {
 
             // On the left: big symbol, title, description, on a glass card.
             float cx = 500 * k;
-            if (screen == MAIN) glassCard(c, 150 * k, 230 * k, 850 * k, 790 * k, 44 * k);
-            Symbols.draw(getContext(), c, "sparkles", cx, 400 * k, 150 * k, 0xEBFFFFFF);
-            c.drawText("Free My TV", cx, 612 * k, title);
-            c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 660 * k, subtitle);
-            c.drawText(versionName(getContext()), cx, 704 * k, version);
+            if (screen == MAIN) {
+                glassCard(c, 150 * k, 200 * k, 850 * k, 830 * k, 48 * k);
+                Symbols.draw(getContext(), c, "sparkles", cx, 330 * k, 130 * k, fg(0xEB));
+                c.drawText("Free My TV", cx, 478 * k, title);
+                c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 528 * k, subtitle);
+                c.drawText(versionName(getContext()), cx, 572 * k, version);
+            } else {
+                Symbols.draw(getContext(), c, "sparkles", cx, 400 * k, 150 * k, fg(0xEB));
+                c.drawText("Free My TV", cx, 612 * k, title);
+                c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 660 * k, subtitle);
+                c.drawText(versionName(getContext()), cx, 704 * k, version);
+            }
 
             if (screen == MAIN) drawMain(c, seconds); else if (screen == HOME_CHOICE) drawChoice(c); else if (screen == PICKER) drawPicker(c); else if (screen == SHELF_EDIT) drawShelfEditor(c);
             else if (screen == TMDB_KEY) drawKey(c);
@@ -599,80 +617,133 @@ public class SettingsActivity extends Activity {
 
         private void glassCard(Canvas c, float l, float t, float r, float b, float radius) {
             tmp.set(l, t, r, b);
+            glassFill.setColor(light ? 0x66FFFFFF : 0x24FFFFFF);
+            glassRim.setColor(light ? 0xB3FFFFFF : 0x59FFFFFF);
             c.drawRoundRect(tmp, radius, radius, glassFill);
             c.drawRoundRect(tmp, radius, radius, glassRim);
         }
 
-        private void drawMain(Canvas c, float seconds) {
-            glassCard(c, (LIST_X - 24) * k, (MAIN_TOP - 16) * k, (LIST_R + 24) * k,
-                    (MAIN_TOP + 8 * (ROW_H + MAIN_GAP) + 8) * k, 40 * k);
-            boolean working = busy();
-            String busyText = busyText();
-            String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
-            String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
-                    Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
-                    Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
-            String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", "", "", ""};
-            for (int i = 0; i < labels.length; i++) {
-                float y = (MAIN_TOP + i * (ROW_H + MAIN_GAP)) * k;
-                rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
-                float f = drawRowBackground(c, i);
-                boolean off = unavailable(i) != null;
-                int ink = off ? blend(0x73FFFFFF, 0x731C1C1E, f) : blend(0xF2FFFFFF, INK, f);
-                rowLabel.setColor(ink);
-                float base = rowRect.centerY() + Ui.halfCap(rowLabel);
-                float bs = 38 * k, bx = rowRect.left + 22 * k;
-                tmp.set(bx, rowRect.centerY() - bs / 2, bx + bs, rowRect.centerY() + bs / 2);
-                iconBox.setColor(blend(0x2EFFFFFF, 0x14000000, f));
-                c.drawRoundRect(tmp, 11 * k, 11 * k, iconBox);
-                Symbols.draw(getContext(), c, ROW_ICONS[i], tmp.centerX(), tmp.centerY(), 24 * k, ink);
-                c.drawText(labels[i], rowRect.left + 78 * k, base, rowLabel);
-                float right = rowRect.right - 30 * k;
-                if (off) {
-                    rowValue.setColor(blend(0x59FFFFFF, 0x591C1C1E, f));
-                    c.drawText(Ui.tr("Unavailable"), right, base, rowValue);
-                } else if (i >= 2) {
-                    float cw = Symbols.width(getContext(), "chevron_right", 22 * k);
-                    Symbols.draw(getContext(), c, "chevron_right", right - cw / 2, rowRect.centerY(), 22 * k, blend(0x66FFFFFF, 0x991C1C1E, f));
-                } else if (i == 0 && working) {
-                    // Switching: the current step in place of the value, with the spinning arc.
-                    String text = busyText.isEmpty() ? Ui.tr("Starting…") : busyText;
-                    rowValue.setColor(blend(0xB3FFFFFF, 0xB31C1C1E, f));
-                    String shown = TextUtils.ellipsize(text, new TextPaint(rowValue), 470 * k, TextUtils.TruncateAt.END).toString();
-                    c.drawText(shown, right, base, rowValue);
-                    float sx = right - rowValue.measureText(shown) - 26 * k;
-                    spinner.setColor(blend(0xFFFFFFFF, INK, f));
-                    Ui.spinner(c, sx, rowRect.centerY(), 12 * k, seconds * 1.3f, spinner);
-                } else {
-                    rowValue.setColor(blend(0x8CFFFFFF, 0x8C1C1C1E, f));
-                    c.drawText(values[i], right, base, rowValue);
+        private void drawTabs(Canvas c) {
+            String[] names = {Ui.tr("Settings"), Ui.tr("Performance"), Ui.tr("Good to know")};
+            float l = LIST_X * k, t = 130 * k, h = 62 * k, w = (LIST_R - LIST_X) * k;
+            glassCard(c, l, t, l + w, t + h, h / 2);
+            float cw = w / 3;
+            for (int i = 0; i < 3; i++) {
+                if (i == tab) {
+                    tmp.set(l + cw * i + 6 * k, t + 6 * k, l + cw * (i + 1) - 6 * k, t + h - 6 * k);
+                    white.setAlpha(light ? 255 : 235);
+                    shadow.setColor(0x22000000);
+                    c.drawRoundRect(tmp, (h - 12 * k) / 2, (h - 12 * k) / 2, white);
                 }
+                rowLabel.setColor(i == tab ? INK : fg(0xB3));
+                rowLabel.setTextAlign(Paint.Align.CENTER);
+                c.drawText(names[i], l + cw * (i + 0.5f), t + h / 2 + Ui.halfCap(rowLabel), rowLabel);
+                rowLabel.setTextAlign(Paint.Align.LEFT);
             }
+            white.setAlpha(255);
+        }
 
-            float y = (MAIN_TOP + labels.length * (ROW_H + MAIN_GAP) + 20) * k;
+        /** The Free My TV / Original switch on the left card; OK opens the choice, as the old first row did. */
+        private void drawSwitch(Canvas c, float seconds) {
+            boolean working = busy();
+            float f = Ui.clamp(pop[0].value);
+            float l = SEG_L * k, t = SEG_T * k, r = SEG_R * k, b = SEG_B * k;
+            tmp.set(l, t, r, b);
+            float rad = (b - t) / 2;
+            iconBox.setColor(light ? 0x40FFFFFF : 0x2EFFFFFF);
+            c.drawRoundRect(tmp, rad, rad, iconBox);
+            if (f > 0.01f) {
+                glassRim.setColor(Ui.alpha(light ? 0xFF1C1C1E : 0xFFFFFFFF, 0.8f * f));
+                c.drawRoundRect(tmp, rad, rad, glassRim);
+            }
+            boolean free = freeActive();
+            float half = (r - l) / 2;
+            float x0 = free ? l : l + half;
+            tmp.set(x0 + 6 * k, t + 6 * k, x0 + half - 6 * k, b - 6 * k);
+            white.setAlpha(255);
+            c.drawRoundRect(tmp, rad - 6 * k, rad - 6 * k, white);
+            rowLabel.setTextAlign(Paint.Align.CENTER);
+            float base = (t + b) / 2 + Ui.halfCap(rowLabel);
+            rowLabel.setColor(free ? INK : fg(0xB3));
+            c.drawText("Free My TV", l + half / 2, base, rowLabel);
+            rowLabel.setColor(free ? fg(0xB3) : INK);
+            c.drawText(Ui.tr("Original"), l + half * 1.5f, base, rowLabel);
+            rowLabel.setTextAlign(Paint.Align.LEFT);
+            String busyText = busyText();
             String error = phone ? HomeMode.phoneText() : stalled ? stalledText() : state.optString("error");
-            if (working && busyText.equals(Ui.tr("Accept “Allow USB debugging?” on the TV (tick “Always allow”)."))) {
-                c.drawText(Ui.tr("On the TV: tick “Always allow” and press OK."),
-                        LIST_X * k + 30 * k, y, warn);
-                y += 46 * k;
-            } else if (!working && !error.isEmpty()) {
-                // The whole message, on up to five lines: some say what to do (the Wi-Fi one, #14). A stalled switch's
-                // ends with a command, which must never be cut: eight there.
-                int width = Math.round(760 * k);
+            float cx = 500 * k, y = 770 * k;
+            if (working) {
+                String text = busyText.isEmpty() ? Ui.tr("Starting…") : busyText;
+                if (busyText.equals(Ui.tr("Accept “Allow USB debugging?” on the TV (tick “Always allow”)."))) {
+                    text = Ui.tr("On the TV: tick “Always allow” and press OK.");
+                }
+                notice.setTextAlign(Paint.Align.CENTER);
+                notice.setColor(fg(0xB3));
+                String shown = TextUtils.ellipsize(text, notice, 600 * k, TextUtils.TruncateAt.END).toString();
+                c.drawText(shown, cx + 14 * k, y, notice);
+                spinner.setColor(fg(0xFF));
+                Ui.spinner(c, cx - notice.measureText(shown) / 2 - 14 * k, y - 8 * k, 11 * k, seconds * 1.3f, spinner);
+                notice.setTextAlign(Paint.Align.LEFT);
+            } else if (!error.isEmpty()) {
+                int width = Math.round(560 * k);
                 if (errorLayout == null || !error.equals(errorShown) || errorLayout.getWidth() != width) {
                     errorShown = error;
                     errorLayout = StaticLayout.Builder.obtain(error, 0, error.length(), new TextPaint(warn), width)
                             .setMaxLines(stalled ? 8 : 5).setEllipsize(TextUtils.TruncateAt.END).build();
                 }
                 c.save();
-                c.translate(LIST_X * k + 30 * k, y - errorLayout.getLineBaseline(0));
+                c.translate(220 * k, y - 10 * k - errorLayout.getLineBaseline(0) + 24 * k);
                 errorLayout.draw(c);
                 c.restore();
-                y += errorLayout.getLineBaseline(errorLayout.getLineCount() - 1) - errorLayout.getLineBaseline(0) + 46 * k;
             }
-            y = drawComparison(c, y);
-            y = drawRecs(c, y + 26 * k);
-            drawNotices(c, y + 40 * k);
+        }
+
+        private void drawMain(Canvas c, float seconds) {
+            drawTabs(c);
+            drawSwitch(c, seconds);
+            if (tab == 1) {
+                glassCard(c, (LIST_X - 24) * k, 232 * k, (LIST_R + 24) * k, 640 * k, 40 * k);
+                drawComparison(c, 310 * k);
+                return;
+            }
+            if (tab == 2) {
+                glassCard(c, (LIST_X - 24) * k, 232 * k, (LIST_R + 24) * k, 900 * k, 40 * k);
+                float y = drawRecs(c, 310 * k);
+                drawNotices(c, y + 50 * k);
+                return;
+            }
+            glassCard(c, (LIST_X - 24) * k, (MAIN_TOP - 16) * k, (LIST_R + 24) * k,
+                    (MAIN_TOP + 7 * (ROW_H + MAIN_GAP) + 4) * k, 40 * k);
+            String[] labels = {Ui.tr("Screensaver"),
+                    Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
+                    Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
+            for (int n = 0; n < labels.length; n++) {
+                int i = n + 1;
+                float y = (MAIN_TOP + n * (ROW_H + MAIN_GAP)) * k;
+                rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
+                float f = drawRowBackground(c, i);
+                boolean off = unavailable(i) != null;
+                int ink = off ? blend(fg(0x73), 0x731C1C1E, f) : blend(fg(0xF2), INK, f);
+                rowLabel.setColor(ink);
+                float base = rowRect.centerY() + Ui.halfCap(rowLabel);
+                float bs = 38 * k, bx = rowRect.left + 22 * k;
+                tmp.set(bx, rowRect.centerY() - bs / 2, bx + bs, rowRect.centerY() + bs / 2);
+                iconBox.setColor(blend(light ? 0x40FFFFFF : 0x2EFFFFFF, 0x14000000, f));
+                c.drawRoundRect(tmp, 11 * k, 11 * k, iconBox);
+                Symbols.draw(getContext(), c, ROW_ICONS[i], tmp.centerX(), tmp.centerY(), 24 * k, ink);
+                c.drawText(labels[n], rowRect.left + 78 * k, base, rowLabel);
+                float right = rowRect.right - 30 * k;
+                if (off) {
+                    rowValue.setColor(blend(fg(0x59), 0x591C1C1E, f));
+                    c.drawText(Ui.tr("Unavailable"), right, base, rowValue);
+                } else if (i >= 2) {
+                    float cw = Symbols.width(getContext(), "chevron_right", 22 * k);
+                    Symbols.draw(getContext(), c, "chevron_right", right - cw / 2, rowRect.centerY(), 22 * k, blend(fg(0x66), 0x991C1C1E, f));
+                } else {
+                    rowValue.setColor(blend(fg(0x8C), 0x8C1C1C1E, f));
+                    c.drawText(Ui.tr("Preview"), right, base, rowValue);
+                }
+            }
         }
 
         /** Home screen picks: status, and the credit TMDB asks for. */
@@ -728,10 +799,10 @@ public class SettingsActivity extends Activity {
                 c.drawText(TextUtils.ellipsize(line, notice, 790 * k, TextUtils.TruncateAt.END).toString(), x, y + 42 * k, notice);
                 return y + 82 * k;
             }
-            cellValue.setColor(0x73FFFFFF);
+            cellValue.setColor(fg(0x73));
             c.drawText(Ui.tr("Original"), colA, y, cellValue);
             c.drawText("Free My TV", colB, y, cellValue);
-            cellValue.setColor(0xD9FFFFFF);
+            cellValue.setColor(fg(0xD9));
             // The mode just switched to: its memory comes two minutes later, so its cells wait with "…", not "—".
             boolean soon = !busy() && memorySoon();
             JSONObject current = HomeMode.FREE.equals(state.optString("mode")) ? b : a;
@@ -764,7 +835,7 @@ public class SettingsActivity extends Activity {
 
         /** Home screen choice: Free My TV or the original, with a check on the one in use. */
         private void drawChoice(Canvas c) {
-            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
+            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
             c.drawText(Ui.tr("Home Screen"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             String free = Capabilities.screensaver(getContext()) ? Ui.tr("No ads, with the new screensaver") : Ui.tr("No ads");
             String[][] options = {{"Free My TV", free},
@@ -774,16 +845,16 @@ public class SettingsActivity extends Activity {
                 float y = (LIST_TOP + 20 + i * (CHOICE_H + ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + CHOICE_H * k);
                 float f = drawRowBackground(c, i);
-                rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
-                rowSub.setColor(blend(0x8CFFFFFF, 0x991C1C1E, f));
+                rowLabel.setColor(blend(fg(0xF2), INK, f));
+                rowSub.setColor(blend(fg(0x8C), 0x991C1C1E, f));
                 c.drawText(options[i][0], rowRect.left + 30 * k, rowRect.top + 44 * k, rowLabel);
                 c.drawText(options[i][1], rowRect.left + 30 * k, rowRect.top + 80 * k, rowSub);
                 if (i == current) {
                     float cw = Symbols.width(getContext(), "check", 26 * k);
-                    Symbols.draw(getContext(), c, "check", rowRect.right - 30 * k - cw / 2, rowRect.centerY(), 26 * k, blend(0xFFFFFFFF, INK, f));
+                    Symbols.draw(getContext(), c, "check", rowRect.right - 30 * k - cw / 2, rowRect.centerY(), 26 * k, blend(fg(0xFF), INK, f));
                 }
             }
-            Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
+            Paint hint = Ui.text(Ui.regular, 23 * k, fg(0x8C));
             c.drawText(Ui.tr("Switching takes a few seconds; the screen blinks while it measures."), LIST_X * k + 30 * k,
                     (LIST_TOP + 20 + 2 * (CHOICE_H + ROW_GAP) + 40) * k, hint);
         }
@@ -876,7 +947,7 @@ public class SettingsActivity extends Activity {
 
         /** The row under the pointer, counted from the list's first row (pickScroll's offset included). */
         private int rowAt(float x, float y) {
-            if (x < LIST_X * k || x > LIST_R * k) return -1;
+            if (screen != MAIN && (x < LIST_X * k || x > LIST_R * k)) return -1;
             for (int i = 0; i < rowCount(); i++) {
                 RectF r = rowBox(i);
                 if (!r.isEmpty() && r.contains(x, y)) return pickScroll + i;
@@ -926,6 +997,14 @@ public class SettingsActivity extends Activity {
                     if (down && screen == SHELF_EDIT) {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                         spoken.focusMoved();   // TalkBack reads the new value or place
+                    } else if (down && screen == MAIN) {
+                        int next = Math.max(0, Math.min(2, tab + (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
+                        if (next != tab) {
+                            tab = next;
+                            if (focus >= rowCount()) focus = 0;
+                            whyRows = null;
+                            spoken.focusMoved();
+                        }
                     } else if (down && (screen == HOME_SETTINGS || screen == REMOTE_KEYS || screen == POWER || screen == PICKS || screen == PICK_FROM)) {
                         adjust(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                     }
@@ -1019,9 +1098,24 @@ public class SettingsActivity extends Activity {
         }
 
         /** Settings wears the chosen pastel theme in its deep (night) version, so the white text stays readable. */
+        /** True on a pastel theme by day: light background, dark text. */
+        private boolean light;
+
         private void themePalette() {
-            if (Prefs.skinOn()) Shaders.skin(scene.palette, Prefs.skin(), 1.3f);
-            else Shaders.settings(scene.palette);
+            if (Prefs.skinOn()) {
+                boolean night = HomeData.get(getContext()).isNight(System.currentTimeMillis());
+                Shaders.skin(scene.palette, Prefs.skin(), night ? 1 : 0);
+                light = !night;
+            } else {
+                Shaders.settings(scene.palette);
+                light = false;
+            }
+        }
+
+        /** The text color for an alpha: white on the dark background, the ink on the pastel one. */
+        private int fg(int alpha) {
+            if (!light) return (alpha << 24) | 0xFFFFFF;
+            return (Math.min(255, alpha + (255 - alpha) / 4) << 24) | 0x1C1C1E;
         }
 
         /** The looks the Theme row's arrows go through: the four pastel themes, then the original sky. */
@@ -1859,7 +1953,7 @@ public class SettingsActivity extends Activity {
                 float y = (LIST_TOP + 20 + i * pitch) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
-                rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
+                rowLabel.setColor(blend(fg(0xF2), INK, f));
                 c.drawText(keyLabel(keyRowIds[i]), rowRect.left + 30 * k, rowRect.centerY() + Ui.halfCap(rowLabel), rowLabel);
             }
             float top = (LIST_TOP + 20 + rows * pitch + 16) * k;
@@ -2118,10 +2212,10 @@ public class SettingsActivity extends Activity {
         }
 
         private void drawWatchApps(Canvas c) {
-            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
+            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
             c.drawText(Ui.tr("Continue Watching apps"),
                     LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
-            Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
+            Paint hint = Ui.text(Ui.regular, 23 * k, fg(0x8C));
             if (watchApps == null || watchApps.isEmpty() && watchHiddenCount == 0) {
                 c.drawText(watchApps == null ? Ui.tr("Looking for the apps…")
                         : Ui.tr("No app on this TV shares what you watch."), LIST_X * k + 30 * k, (LIST_TOP + 56) * k, hint);
@@ -2136,8 +2230,8 @@ public class SettingsActivity extends Activity {
                 float y = (LIST_TOP + 20 + i * (LIST_ROW_H + LIST_ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
-                rowLabel.setColor(blend(on ? 0xF2FFFFFF : 0x80FFFFFF, on ? INK : 0x801C1C1E, f));
-                rowValue.setColor(blend(0xB3FFFFFF, 0xB31C1C1E, f));
+                rowLabel.setColor(blend(on ? fg(0xF2) : fg(0x80), on ? INK : 0x801C1C1E, f));
+                rowValue.setColor(blend(fg(0xB3), 0xB31C1C1E, f));
                 float base = rowRect.centerY() + Ui.halfCap(rowLabel);
                 String label = hiddenRow ? hiddenLabel() : watchApps.get(at)[1];
                 c.drawText(TextUtils.ellipsize(label, new TextPaint(rowLabel), 560 * k, TextUtils.TruncateAt.END).toString(), rowRect.left + 30 * k, base, rowLabel);
@@ -2239,7 +2333,7 @@ public class SettingsActivity extends Activity {
         }
 
         private void drawShelfEditor(Canvas c) {
-            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
+            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
             c.drawText(editingTop ? Ui.tr("Top Buttons") : Ui.tr("Shelf"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             int rows = rowCount();
             boolean locked = shelfOrderLocked();
@@ -2250,31 +2344,31 @@ public class SettingsActivity extends Activity {
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
                 if (app[0].equals(ORDER_ROW)) {
-                    rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
-                    rowValue.setColor(blend(0xB3FFFFFF, 0xB31C1C1E, f));
+                    rowLabel.setColor(blend(fg(0xF2), INK, f));
+                    rowValue.setColor(blend(fg(0xB3), 0xB31C1C1E, f));
                     float base = rowRect.centerY() + Ui.halfCap(rowLabel);
                     c.drawText(app[1], rowRect.left + 30 * k, base, rowLabel);
                     c.drawText(shelfOrderValue(), rowRect.right - 30 * k, base, rowValue);
                     continue;
                 }
                 boolean off = unavailable(i) != null;
-                rowLabel.setColor(off ? blend(0x73FFFFFF, 0x731C1C1E, f)
-                        : blend(place >= 0 ? 0xF2FFFFFF : 0x80FFFFFF, place >= 0 ? INK : 0x801C1C1E, f));
+                rowLabel.setColor(off ? blend(fg(0x73), 0x731C1C1E, f)
+                        : blend(place >= 0 ? fg(0xF2) : fg(0x80), place >= 0 ? INK : 0x801C1C1E, f));
                 // The places are greyed while the shelf puts the last app opened first: they don't apply then.
-                rowValue.setColor(off ? blend(0x59FFFFFF, 0x591C1C1E, f)
-                        : locked && place >= 0 ? blend(0x4DFFFFFF, 0x4D1C1C1E, f) : blend(0xB3FFFFFF, 0xB31C1C1E, f));
+                rowValue.setColor(off ? blend(fg(0x59), 0x591C1C1E, f)
+                        : locked && place >= 0 ? blend(fg(0x4D), 0x4D1C1C1E, f) : blend(fg(0xB3), 0xB31C1C1E, f));
                 float base = rowRect.centerY() + Ui.halfCap(rowLabel);
                 c.drawText(TextUtils.ellipsize(app[1], new TextPaint(rowLabel), 520 * k, TextUtils.TruncateAt.END).toString(), rowRect.left + 30 * k, base, rowLabel);
                 float right = rowRect.right - 30 * k;
                 if (place >= 0 && !off) {
                     // On the shelf: a check, as in the pickers, after its place.
                     float cw = Symbols.width(getContext(), "check", 26 * k);
-                    Symbols.draw(getContext(), c, "check", right - cw / 2, rowRect.centerY(), 26 * k, blend(0xFFFFFFFF, INK, f));
+                    Symbols.draw(getContext(), c, "check", right - cw / 2, rowRect.centerY(), 26 * k, blend(fg(0xFF), INK, f));
                     right -= cw + 16 * k;
                 }
                 c.drawText(off ? Ui.tr("Unavailable") : place >= 0 ? "#" + (place + 1) : Ui.tr("shelf|Off"), right, base, rowValue);
             }
-            Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
+            Paint hint = Ui.text(Ui.regular, 23 * k, fg(0x8C));
             float hy = (LIST_TOP + 20 + rows * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
             if (!editingTop && HomeApps.lowRam(getContext())) {
                 c.drawText(Ui.tr("This TV has little memory, so the shelf holds fewer apps."), LIST_X * k + 30 * k, hy + 38 * k, hint);
@@ -2319,7 +2413,7 @@ public class SettingsActivity extends Activity {
 
         /** A long list (the apps): nine rows at a time, the one in use checked. */
         private void drawPicker(Canvas c) {
-            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
+            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
             String title = pickFor == PICK_CITY ? Ui.tr("City")
                     : pickFor == PICK_LANGUAGE ? Ui.tr("Language")
                     : pickFor == PICK_SLEEP ? Ui.tr("Sleep Timer") : pickFor == PICK_PLACE ? Ui.tr("Position")
@@ -2333,19 +2427,19 @@ public class SettingsActivity extends Activity {
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
                 boolean off = unavailable(i) != null;
-                rowLabel.setColor(off ? blend(0x73FFFFFF, 0x731C1C1E, f) : blend(0xF2FFFFFF, INK, f));
+                rowLabel.setColor(off ? blend(fg(0x73), 0x731C1C1E, f) : blend(fg(0xF2), INK, f));
                 // A long name (an Immich album) stops short of the check mark.
                 c.drawText(TextUtils.ellipsize(pickLabels.get(at), new TextPaint(rowLabel), rowRect.width() - 130 * k,
                         TextUtils.TruncateAt.END).toString(), rowRect.left + 30 * k, rowRect.centerY() + Ui.halfCap(rowLabel), rowLabel);
                 if (off) {
-                    rowValue.setColor(blend(0x59FFFFFF, 0x591C1C1E, f));
+                    rowValue.setColor(blend(fg(0x59), 0x591C1C1E, f));
                     c.drawText(Ui.tr("Unavailable"), rowRect.right - 30 * k, rowRect.centerY() + Ui.halfCap(rowLabel), rowValue);
                 } else if (at == pickCurrent) {
                     float cw = Symbols.width(getContext(), "check", 26 * k);
-                    Symbols.draw(getContext(), c, "check", rowRect.right - 30 * k - cw / 2, rowRect.centerY(), 26 * k, blend(0xFFFFFFFF, INK, f));
+                    Symbols.draw(getContext(), c, "check", rowRect.right - 30 * k - cw / 2, rowRect.centerY(), 26 * k, blend(fg(0xFF), INK, f));
                 }
             }
-            Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
+            Paint hint = Ui.text(Ui.regular, 23 * k, fg(0x8C));
             float hy = (LIST_TOP + 20 + rows * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
             c.drawText((pickScroll + focus + 1) + " / " + pickLabels.size() + "  ·  " + Ui.tr("OK picks, Back cancels."),
                     LIST_X * k + 30 * k, hy, hint);
@@ -2366,21 +2460,21 @@ public class SettingsActivity extends Activity {
 
         /** Picks from: one row per streaming service on the TV, On or Off. */
         private void drawServices(Canvas c) {
-            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
+            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
             c.drawText(Ui.tr("Picks from"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             int rows = Math.min(PICK_VISIBLE, services.size());
             for (int i = 0; i < rows; i++) {
                 float y = (LIST_TOP + 20 + i * (LIST_ROW_H + LIST_ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
-                rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
-                rowValue.setColor(blend(0xB3FFFFFF, 0xB31C1C1E, f));
+                rowLabel.setColor(blend(fg(0xF2), INK, f));
+                rowValue.setColor(blend(fg(0xB3), 0xB31C1C1E, f));
                 float base = rowRect.centerY() + Ui.halfCap(rowLabel);
                 String[] service = services.get(pickScroll + i);   // the list scrolls past 9 services, like the pickers
                 c.drawText(service[1], rowRect.left + 30 * k, base, rowLabel);
                 c.drawText(onOff(!Prefs.serviceOff(service[0])), rowRect.right - 30 * k, base, rowValue);
             }
-            Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
+            Paint hint = Ui.text(Ui.regular, 23 * k, fg(0x8C));
             float hy = (LIST_TOP + 20 + rows * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
             c.drawText(services.isEmpty() ? Ui.tr("No streaming apps on this TV.")
                     : Ui.tr("Titles from a service that is off are left out of the picks."),
@@ -2391,7 +2485,7 @@ public class SettingsActivity extends Activity {
             boolean keys = screen == REMOTE_KEYS;
             String[] labels = listLabels();
             String[] values = listValues();
-            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
+            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
             c.drawText(keys ? Ui.tr("Remote Buttons") : screen == POWER ? Ui.tr("Sleep Timer") : screen == PICKS ? Ui.tr("Picks") : Ui.tr("Home Settings"),
                     LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             float pitch = LIST_ROW_H + LIST_ROW_GAP;
@@ -2400,19 +2494,19 @@ public class SettingsActivity extends Activity {
                 float y = (LIST_TOP + 20 + i * pitch) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
-                rowLabel.setColor(blend(0xF2FFFFFF, INK, f));
+                rowLabel.setColor(blend(fg(0xF2), INK, f));
                 boolean locked = unavailable(i) != null, watchOff = !keys && from + i == WATCH_ROW && watchLocked();
                 if (locked) values[from + i] = Ui.tr("Unavailable");
-                rowValue.setColor(blend(locked ? 0x59FFFFFF : 0xB3FFFFFF, locked ? 0x591C1C1E : 0xB31C1C1E, f));
-                if (watchOff) rowValue.setColor(blend(0x59FFFFFF, 0x591C1C1E, f));
-                if (locked || watchOff) rowLabel.setColor(blend(0x73FFFFFF, 0x731C1C1E, f));
+                rowValue.setColor(blend(locked ? fg(0x59) : fg(0xB3), locked ? 0x591C1C1E : 0xB31C1C1E, f));
+                if (watchOff) rowValue.setColor(blend(fg(0x59), 0x591C1C1E, f));
+                if (locked || watchOff) rowLabel.setColor(blend(fg(0x73), 0x731C1C1E, f));
                 float base = rowRect.centerY() + Ui.halfCap(rowLabel);
                 c.drawText(labels[from + i], rowRect.left + 30 * k, base, rowLabel);
                 float right = rowRect.right - 30 * k;
                 if (!keys && !locked && from + i == WATCH_ROW) {
                     float cw = Symbols.width(getContext(), "chevron_right", 22 * k);
                     Symbols.draw(getContext(), c, "chevron_right", right - cw / 2, rowRect.centerY(), 22 * k,
-                            blend(watchOff ? 0x33FFFFFF : 0x66FFFFFF, watchOff ? 0x331C1C1E : 0x991C1C1E, f));
+                            blend(watchOff ? fg(0x33) : fg(0x66), watchOff ? 0x331C1C1E : 0x991C1C1E, f));
                     right -= cw + 16 * k;
                 }
                 // A long value (an update that failed, a city) stops short of its label.
@@ -2420,7 +2514,7 @@ public class SettingsActivity extends Activity {
                 c.drawText(TextUtils.ellipsize(values[from + i], rowValueFit, room, TextUtils.TruncateAt.END).toString(),
                         right, base, rowValue);
             }
-            Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
+            Paint hint = Ui.text(Ui.regular, 23 * k, fg(0x8C));
             float hy = (LIST_TOP + 20 + rows * pitch + 36) * k;
             // A list longer than the screen says where we are in it, as the app picker does. Photos say where they come
             // from; on the Sleep Timer screen, the timer and Position open a list on OK.

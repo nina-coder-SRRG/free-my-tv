@@ -1796,6 +1796,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         tmp.offset(0, 18 * k);
         shadow.setColor(tone(0x1F000000, 0x52000000));
         shadows.draw(c, tmp, radius, SHADOW_BLUR * k, shadow);
+        if (skinLayout) {
+            pastelGlass(c, platterRect, radius);
+            return;
+        }
         // White glass by day; smoked glass at night.
         scene.liquid(c, platterRect, radius, tone(glassLight(), SMOKE), tone(0.42f, 0.12f), tone(0.03f, 0.08f),
                 tone(30, 34) * k, tone(22, 28) * k, tone(0.65f, 0.95f), 1);
@@ -2320,7 +2324,45 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void drawerCard(Canvas c, RectF r) {
-        drawerGlass(c, r, 30 * k, 0.72f, 0x1A000000, 10 * k);
+        if (skinLayout) pastelGlass(c, r, 30 * k);
+        else drawerGlass(c, r, 30 * k, 0.72f, 0x1A000000, 10 * k);
+    }
+
+    private Paint glassRim, glassSheen;
+    private final android.graphics.Matrix sheenMatrix = new android.graphics.Matrix();
+
+    /**
+     * Pastel themes' glass: a see-through white (the gradient shows through), a bright rim and a sheen along the top
+     * edge, so it reads as glass even where the TV draws it without shaders (there the glass is a flat fill).
+     */
+    private void pastelGlass(Canvas c, RectF r, float radius) {
+        float dk = dark();
+        if (dk < 0.999f) {
+            tmp.set(r);
+            tmp.offset(0, 14 * k);
+            shadow.setColor(Ui.alpha(0x26000000, 1 - dk));
+            shadows.draw(c, tmp, radius, SHADOW_BLUR * k, shadow);
+            scene.glass(c, r, radius, 0xFFFFFFFF, 0.34f, 0, 0, 0.02f, 1, 1 - dk);
+            if (glassRim == null) {
+                glassRim = new Paint(Paint.ANTI_ALIAS_FLAG);
+                glassRim.setStyle(Paint.Style.STROKE);
+                glassSheen = new Paint(Paint.ANTI_ALIAS_FLAG);
+                glassSheen.setShader(new android.graphics.LinearGradient(0, 0, 0, 1, 0x99FFFFFF, 0x00FFFFFF,
+                        android.graphics.Shader.TileMode.CLAMP));
+            }
+            int a = Math.round(255 * (1 - dk));
+            float inset = 1.5f * k;
+            tmp.set(r.left + inset, r.top + inset, r.right - inset, r.bottom - inset);
+            sheenMatrix.setScale(1, r.height() * 0.5f);
+            sheenMatrix.postTranslate(0, r.top);
+            glassSheen.getShader().setLocalMatrix(sheenMatrix);
+            glassSheen.setAlpha(a);
+            c.drawRoundRect(tmp, radius, radius, glassSheen);
+            glassRim.setStrokeWidth(3 * k);
+            glassRim.setColor(Ui.alpha(0xFFFFFFFF, 0.85f * (1 - dk)));
+            c.drawRoundRect(tmp, radius, radius, glassRim);
+        }
+        if (dk > 0.001f) scene.glass(c, r, radius, SMOKE, 0.4f, 0, 0, 0.02f, 1, dk);
     }
 
     private void drawDrawer(Canvas c) {
@@ -5159,7 +5201,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             float cw = w * W_WEIGHT[i] / total;
             widgetCard.set(left, top, left + cw, top + W_H * k);
             left += cw + gap;
-            drawerGlass(c, widgetCard, W_RADIUS * k, 0.72f, 0x1A000000, 10 * k);
+            pastelGlass(c, widgetCard, W_RADIUS * k);
             if (i == 0) drawWeatherWidget(c, widgetCard, accent);
             else if (i == 1) drawCalendarWidget(c, widgetCard, accent);
             else drawCountdownWidget(c, widgetCard);
