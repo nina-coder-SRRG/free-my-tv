@@ -368,6 +368,18 @@ final class Prefs {
 
     // MARK: - Widgets and coins
 
+    /** Pastel home: the month calendar card and the countdown card (both on by default). */
+    static boolean calendarCard() { return sp().getBoolean("calendarCard", true); }
+    static void setCalendarCard(boolean on) { put("calendarCard", on); }
+    static boolean countdownCard() { return sp().getBoolean("countdownCard", true); }
+    static void setCountdownCard(boolean on) { put("countdownCard", on); }
+    /** The countdown's name and day (midnight, local time); without a day, the next December 25. */
+    static String countdownLabel() { return sp().getString("countdownLabel", "").trim(); }
+    static long countdownDay() { return sp().getLong("countdownDay", 0); }
+    static void setCountdown(String label, long day) {
+        sp().edit().putString("countdownLabel", label).putLong("countdownDay", day).apply();
+        version++;
+    }
     static boolean weather() { return sp().getBoolean("weather", true); }
     static void setWeather(boolean on) { put("weather", on); }
     /** The weather card's forecast: "hours" (the next 6 hours) or "days" (the next 5 days). */

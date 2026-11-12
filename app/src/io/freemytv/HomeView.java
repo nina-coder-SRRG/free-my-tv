@@ -123,6 +123,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final float L_PLATTER_TOP = 814, L_TILE_H = 126;
     private static final float L_DATE_BASE = 330, L_CLOCK_BASE = 540, L_WEATHER_BASE = 626, L_QUOTES_BASE = 694;
     private static final float L_TOP_CLOCK_BASE = 168;
+    // Pastel home: the row of glass cards under the clock (weather, month calendar, countdown).
+    private static final float W_TOP = 340, W_H = 405, W_GAP = 30, W_RADIUS = 54;
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
     private static String[] tabs;
     private static int tabsGeneration = -1;
@@ -938,6 +940,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lClockTop.setLetterSpacing(-0.04f);
         lDateTop = Ui.text(Ui.semibold, 38 * k, L_DIM);
         lWeather = Ui.text(Ui.medium, 34 * k, L_DIM);
+        wLabel = Ui.text(Ui.semibold, 28 * k, L_DIM);
+        wBig = Ui.numbers(Ui.displaySemibold, 114 * k, L_INK);
+        wBig.setLetterSpacing(-0.04f);
+        wText = Ui.text(Ui.semibold, 33 * k, L_INK);
+        wDim = Ui.text(Ui.medium, 28 * k, L_DIM);
+        wHead = Ui.text(Ui.semibold, 24 * k, L_DIM);
+        wHead.setTextAlign(Paint.Align.CENTER);
+        wDay = Ui.numbers(Ui.medium, 27 * k, L_INK);
+        wDay.setTextAlign(Paint.Align.CENTER);
+        wDayOn = Ui.numbers(Ui.semibold, 27 * k, 0xFFFFFFFF);
+        wDayOn.setTextAlign(Paint.Align.CENTER);
+        wMonth = Ui.text(Ui.displaySemibold, 34 * k, L_INK);
+        wCount = Ui.numbers(Ui.displaySemibold, 144 * k, L_INK);
+        wCount.setLetterSpacing(-0.05f);
         lClockQuote = Ui.numbers(Ui.medium, 28 * k, L_DIM);
         lightGradient = tintShade = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
@@ -1235,6 +1251,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** Pastel theme on: its text colors, and the clock at the top-left with the date beside it. */
     private boolean skinLayout;
+    private final RectF widgetCard = new RectF();
+    private Paint wLabel, wBig, wText, wDim, wHead, wDay, wDayOn, wMonth, wCount;
+    private long widgetDay = -1;
+    private int widgetPrefs = -1;
+    private String widgetLanguage = "";
+    private String monthLabel = "", countText = "", countUnit = "", countName = "";
+    private final String[] weekHeads = new String[7];
+    private int firstCol, monthDays, todayDate;
     private int inkDay = L_INK, dimDay = L_DIM, faintDay = L_FAINT;
 
     // MARK: - Recommendations: hero and background
@@ -1477,6 +1501,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lClockTop.setColor(tone(inkDay, WHITE));
         lDateTop.setColor(tone(dimDay, 0xFF98989D));
         lWeather.setColor(tone(dimDay, 0xFF98989D));
+        wLabel.setColor(tone(dimDay, 0xFF98989D));
+        wDim.setColor(tone(dimDay, 0xFF98989D));
+        wHead.setColor(tone(dimDay, 0xFF98989D));
+        wText.setColor(tone(inkDay, WHITE));
+        wBig.setColor(tone(inkDay, WHITE));
+        wDay.setColor(tone(inkDay, WHITE));
+        wMonth.setColor(tone(inkDay, WHITE));
+        wCount.setColor(widgetAccent());
         lClockQuote.setColor(tone(dimDay, 0xFF98989D));
         staleQuote.setColor(tone(faintDay, 0x99FFFFFF));
         if (continueMode()) applyWatchContrast();
@@ -1868,13 +1900,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         String line = clock ? playingClock : playingTab;
         if (line != null) {
             float cap = clock ? playingClockCap : playingTabCap, gap = cap * 0.6f;
-            float base = clock ? L_QUOTES_BASE * k : (L_TABBAR_TOP + L_TABBAR_H / 2) * k + cap / 2;
+            float base = clock ? (skinLayout ? (L_TOP_CLOCK_BASE + 76) : L_QUOTES_BASE) * k : (L_TABBAR_TOP + L_TABBAR_H / 2) * k + cap / 2;
             float x = clock ? MARGIN * k : right - playingTabWidth - gap - NowPlaying.barsWidth(cap);
             NowPlaying.drawBars(c, x, base, cap, text, SystemClock.uptimeMillis() < barsUntil, barRect);
             c.drawText(line, x + NowPlaying.barsWidth(cap) + gap, base, text);
             text.setColor(textColor);
             return;
         }
+        if (skinLayout) { text.setColor(textColor); return; }   // the pastel home has no quotes
         // One read of the list, so n always matches the coins drawn below.
         int[] coins = HomeData.active();
         int n = coins.length;
@@ -4766,6 +4799,127 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         return Recs.hasKey(getContext());
     }
 
+    private int widgetAccent() {
+        return blend(scene.palette.color(1), tone(inkDay, 0xFFFFFFFF), tone(0.5f, 0.2f));
+    }
+
+    /** The calendar and countdown texts, made again when the day, the settings or the language change. */
+    private void refreshWidgets() {
+        long now = System.currentTimeMillis();
+        java.util.Calendar cal = java.util.Calendar.getInstance(Ui.locale());
+        cal.setTimeInMillis(now);
+        long day = cal.get(java.util.Calendar.YEAR) * 400L + cal.get(java.util.Calendar.DAY_OF_YEAR);
+        if (day == widgetDay && Prefs.version == widgetPrefs && Ui.language.equals(widgetLanguage)) return;
+        widgetDay = day;
+        widgetPrefs = Prefs.version;
+        widgetLanguage = Ui.language;
+        java.util.Locale loc = Ui.locale();
+        todayDate = cal.get(java.util.Calendar.DAY_OF_MONTH);
+        String m = new java.text.SimpleDateFormat("LLLL yyyy", loc).format(now);
+        monthLabel = m.isEmpty() ? m : m.substring(0, 1).toUpperCase(loc) + m.substring(1);
+        monthDays = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH);
+        java.util.Calendar first = (java.util.Calendar) cal.clone();
+        first.set(java.util.Calendar.DAY_OF_MONTH, 1);
+        firstCol = (first.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7;   // weeks start on Monday
+        java.util.Calendar mon = java.util.Calendar.getInstance(loc);
+        mon.set(2024, java.util.Calendar.JANUARY, 1);   // a Monday
+        java.text.SimpleDateFormat narrow = new java.text.SimpleDateFormat("EEEEE", loc);
+        for (int i = 0; i < 7; i++) {
+            weekHeads[i] = narrow.format(mon.getTime()).toUpperCase(loc);
+            mon.add(java.util.Calendar.DAY_OF_MONTH, 1);
+        }
+        // Countdown: midnight to midnight, rounded so a daylight-saving change doesn't move a day.
+        java.util.Calendar today = (java.util.Calendar) cal.clone();
+        today.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        today.set(java.util.Calendar.MINUTE, 0);
+        today.set(java.util.Calendar.SECOND, 0);
+        today.set(java.util.Calendar.MILLISECOND, 0);
+        long target = Prefs.countdownDay();
+        if (target <= 0) {
+            java.util.Calendar xmas = (java.util.Calendar) today.clone();
+            xmas.set(java.util.Calendar.MONTH, java.util.Calendar.DECEMBER);
+            xmas.set(java.util.Calendar.DAY_OF_MONTH, 25);
+            if (xmas.before(today)) xmas.add(java.util.Calendar.YEAR, 1);
+            target = xmas.getTimeInMillis();
+        }
+        long n = Math.max(0, Math.round((target - today.getTimeInMillis()) / 86_400_000.0));
+        countText = String.valueOf(n);
+        countUnit = n == 1 ? Ui.tr("day left") : Ui.tr("days left");
+        String name = Prefs.countdownLabel();
+        countName = name.isEmpty() ? (Prefs.countdownDay() <= 0 ? Ui.tr("Christmas") : "") : name;
+    }
+
+    /** The row of glass cards under the clock, as many as are on, sharing the width. */
+    private void drawWidgets(Canvas c) {
+        boolean weather = Prefs.weather(), calendar = Prefs.calendarCard(), count = Prefs.countdownCard();
+        int n = (weather ? 1 : 0) + (calendar ? 1 : 0) + (count ? 1 : 0);
+        if (n == 0) return;
+        refreshWidgets();
+        float gap = W_GAP * k, w = (CONTENT_R - MARGIN) * k, cw = (w - gap * (n - 1)) / n;
+        float left = MARGIN * k, top = W_TOP * k;
+        int accent = widgetAccent();
+        wCount.setColor(accent);
+        for (int i = 0; i < 3; i++) {
+            if (i == 0 && !weather || i == 1 && !calendar || i == 2 && !count) continue;
+            widgetCard.set(left, top, left + cw, top + W_H * k);
+            left += cw + gap;
+            drawerGlass(c, widgetCard, W_RADIUS * k, 0.72f, 0x1A000000, 10 * k);
+            if (i == 0) drawWeatherWidget(c, widgetCard, accent);
+            else if (i == 1) drawCalendarWidget(c, widgetCard, accent);
+            else drawCountdownWidget(c, widgetCard);
+        }
+    }
+
+    private void drawWeatherWidget(Canvas c, RectF r, int accent) {
+        float x = r.left + 40 * k;
+        String city = Prefs.city();
+        c.drawText(city.isEmpty() ? Ui.tr("Weather") : city, x, r.top + 72 * k, wLabel);
+        HomeData.Weather wx = data.weather;
+        if (Double.isNaN(wx.temp)) {
+            c.drawText(Ui.tr("No weather data right now."), x, r.centerY() + 10 * k, wDim);
+            return;
+        }
+        String symbol = Symbols.weather(wx.code, wx.isDay);
+        float size = 96 * k, sw = Symbols.width(getContext(), symbol, size);
+        float mid = r.centerY() - 4 * k;
+        Symbols.draw(getContext(), c, symbol, x + sw / 2, mid, size, accent);
+        String temp = HomeData.degrees(wx.temp);
+        c.drawText(temp, x + sw + 22 * k - Ui.leftBearing(wBig, temp), mid + Ui.halfCap(wBig), wBig);
+        c.drawText(HomeData.condition(wx.code, wx.isDay), x, r.bottom - 78 * k, wText);
+        c.drawText(HomeData.highLow(wx, "   "), x, r.bottom - 36 * k, wDim);
+    }
+
+    private void drawCalendarWidget(Canvas c, RectF r, int accent) {
+        float pad = 36 * k, x0 = r.left + pad, cw = (r.width() - 2 * pad) / 7;
+        c.drawText(monthLabel, x0, r.top + 66 * k, wMonth);
+        float headBase = r.top + 116 * k;
+        for (int i = 0; i < 7; i++) c.drawText(weekHeads[i], x0 + cw * (i + 0.5f), headBase, wHead);
+        int rows = (firstCol + monthDays + 6) / 7;
+        float rowsTop = r.top + 134 * k, avail = r.bottom - 22 * k - rowsTop;
+        float rowH = Math.min(46 * k, avail / rows);
+        for (int d = 1; d <= monthDays; d++) {
+            int cell = firstCol + d - 1;
+            float cx = x0 + cw * (cell % 7 + 0.5f), cy = rowsTop + rowH * (cell / 7 + 0.5f);
+            if (d == todayDate) {
+                fill.setShader(null);
+                fill.setColor(accent);
+                c.drawCircle(cx, cy, Math.min(rowH, cw) * 0.46f, fill);
+            }
+            String label = String.valueOf(d);
+            Paint p = d == todayDate ? wDayOn : wDay;
+            c.drawText(label, cx, cy + Ui.halfCap(p), p);
+        }
+    }
+
+    private void drawCountdownWidget(Canvas c, RectF r) {
+        float x = r.left + 40 * k;
+        c.drawText(Ui.tr("Countdown"), x, r.top + 72 * k, wLabel);
+        float base = r.centerY() + 46 * k;
+        c.drawText(countText, x - Ui.leftBearing(wCount, countText), base, wCount);
+        c.drawText(countUnit, x + wCount.measureText(countText) + 20 * k, base, wDim);
+        if (!countName.isEmpty()) c.drawText(countName, x, r.bottom - 36 * k, wText);
+    }
+
     private void drawClock(Canvas c) {
         float x = MARGIN * k;
         float weatherBase = L_WEATHER_BASE * k;
@@ -4775,6 +4929,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             c.drawText(clockText, x - Ui.leftBearing(lClockTop, clockText), base, lClockTop);
             c.drawText(dateText, x + lClockTop.measureText(clockText) + 30 * k, base, lDateTop);
             weatherBase = base + 76 * k;
+            drawWidgets(c);
+            if (Prefs.weather()) return;   // the weather has its own card
         } else {
             c.drawText(dateText, x - Ui.leftBearing(lDate, dateText), L_DATE_BASE * k, lDate);
             c.drawText(clockText, x - Ui.leftBearing(lClock, clockText), L_CLOCK_BASE * k, lClock);

@@ -77,8 +77,8 @@ final class Ui {
         AssetManager a = c.getAssets();
         thin = font(a, 32, 200);
         light = font(a, 32, 300);
-        displayMedium = font(a, 32, 500);
-        displaySemibold = font(a, 32, 600);
+        displayMedium = display(a, 600, font(a, 32, 500));
+        displaySemibold = display(a, 700, font(a, 32, 600));
         regular = font(a, 14, 400);
         medium = font(a, 14, 500);
         semibold = font(a, 14, 600);
@@ -100,6 +100,18 @@ final class Ui {
         return Typeface.create(Typeface.DEFAULT, weight >= 600 ? Typeface.BOLD : Typeface.NORMAL);
     }
 
+    /** Bricolage Grotesque (the maquette's display face) at a weight; `fallback` when the file is missing. */
+    private static Typeface display(AssetManager a, int weight, Typeface fallback) {
+        if (!has(a, BRICOLAGE)) return fallback;
+        try {
+            Typeface t = new Typeface.Builder(a, BRICOLAGE)
+                    .setFontVariationSettings("'opsz' 96, 'wdth' 100, 'wght' " + weight).build();
+            if (t != null) return t;
+        } catch (RuntimeException ignored) {
+        }
+        return fallback;
+    }
+
     /** Only this class touches the Android 9 call, so Ui itself still verifies on Android 8 (like Recording.Node). */
     private static final class Weighted {
         static Typeface create(int weight) {
@@ -110,6 +122,7 @@ final class Ui {
     private static final String FONT = "fonts/InterVariable.ttf";
     /** Figtree (OFL), the maquette's typeface; it has no optical-size axis, which the variation settings ignore. */
     private static final String FIGTREE = "fonts/Figtree.ttf";
+    private static final String BRICOLAGE = "fonts/BricolageGrotesque.ttf";
 
     // MARK: - Text in the viewer's language
 
