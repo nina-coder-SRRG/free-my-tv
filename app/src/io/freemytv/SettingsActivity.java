@@ -749,7 +749,7 @@ public class SettingsActivity extends Activity {
             float panelTop = MAIN_TOP - 44, panelBottom = TOP + 606;
             if (tab == 1) {
                 glassCard(c, (LIST_X - 24) * k, panelTop * k, (LIST_R + 24) * k, panelBottom * k, 34 * k);
-                drawComparison(c, (panelTop + 80) * k);
+                drawPerf(c, panelTop);
                 return;
             }
             if (tab == 2) {
@@ -833,6 +833,48 @@ public class SettingsActivity extends Activity {
                 rowRect.set(tmp);
             }
             return f;
+        }
+
+        /** The comparison as bars: for each measure, the original home screen's and Free My TV's. */
+        private void drawPerf(Canvas c, float top) {
+            JSONObject metrics = state.optJSONObject("metrics");
+            JSONObject a = metrics == null ? null : metrics.optJSONObject(HomeMode.ORIGINAL);
+            JSONObject b = metrics == null ? null : metrics.optJSONObject(HomeMode.FREE);
+            if (a == null && b == null) {
+                drawComparison(c, (top + 80) * k);
+                return;
+            }
+            boolean soon = !busy() && memorySoon();
+            JSONObject current = HomeMode.FREE.equals(state.optString("mode")) ? b : a;
+            String[][] rows = {{Ui.tr("Home button"), "homeMs"}, {Ui.tr("Free memory"), "memAvailableMB"},
+                    {Ui.tr("Home screen memory"), "homePssMB"}};
+            float x0 = (LIST_X + 30) * k, x1 = (LIST_R - 30) * k, barX = x0 + 140 * k, barMax = x1 - barX - 130 * k;
+            int ac = accent();
+            for (int r = 0; r < rows.length; r++) {
+                float y = (top + 40 + r * 155) * k;
+                cellLabel.setColor(fg(0xF2));
+                c.drawText(rows[r][0], x0, y + 24 * k, cellLabel);
+                double va = a == null ? -1 : a.optDouble(rows[r][1], -1), vb = b == null ? -1 : b.optDouble(rows[r][1], -1);
+                double vmax = Math.max(Math.max(va, vb), 1);
+                for (int j = 0; j < 2; j++) {
+                    JSONObject m = j == 0 ? a : b;
+                    double v = j == 0 ? va : vb;
+                    float cy = y + (66 + j * 44) * k;
+                    header.setColor(fg(0x99));
+                    c.drawText(j == 0 ? Ui.tr("Original") : "Free My TV", x0, cy + Ui.halfCap(header), header);
+                    tmp.set(barX, cy - 10 * k, barX + barMax, cy + 10 * k);
+                    iconBox.setColor(light ? 0x1F000000 : 0x26FFFFFF);
+                    c.drawRoundRect(tmp, 10 * k, 10 * k, iconBox);
+                    if (v > 0) {
+                        tmp.set(barX, cy - 10 * k, barX + Math.max(20 * k, (float) (barMax * v / vmax)), cy + 10 * k);
+                        iconBox.setColor(j == 0 ? fg(0x66) : ac);
+                        c.drawRoundRect(tmp, 10 * k, 10 * k, iconBox);
+                    }
+                    cellValue.setColor(fg(0xD9));
+                    boolean waits = soon && r > 0 && current == m;
+                    c.drawText(metric(m, rows[r][1], waits), x1, cy + Ui.halfCap(cellValue), cellValue);
+                }
+            }
         }
 
         private float drawComparison(Canvas c, float y) {
@@ -1061,6 +1103,11 @@ public class SettingsActivity extends Activity {
                     if (down && screen == SHELF_EDIT) {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                         spoken.focusMoved();   // TalkBack reads the new value or place
+                    } else if (down && screen == MAIN && (focus == 0 || focus == 9 && tab == 0
+                            && e.getKeyCode() == KeyEvent.KEYCODE_DPAD_LEFT)) {
+                        // The home screen entry sits to the left of the tab bar.
+                        focus = focus == 0 ? (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 9 : 0) : 0;
+                        spoken.focusMoved();
                     } else if (down && screen == MAIN) {
                         int next = Math.max(0, Math.min(2, tab + (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
                         if (next != tab) {
