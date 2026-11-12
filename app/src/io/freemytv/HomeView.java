@@ -224,7 +224,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private WatchNext.Item menuItem;
     private String menuTitle = "", menuSub = "";
     private float menuOptionsTop;
-    private Paint menuTitlePaint, menuSubPaint, menuOptionPaint, palLabel, palText, palSmall;
+    private Paint menuTitlePaint, menuSubPaint, menuOptionPaint, palLabel, palText, palSmall, dockName;
     private final RectF[] palCells = new RectF[MENU_MAX];
     private final float[] palLabelY = new float[3];
     private android.graphics.Shader[] palSwatch = new android.graphics.Shader[4];
@@ -1004,6 +1004,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         menuTitlePaint = Ui.text(Ui.semibold, 34 * k, L_INK);
         menuSubPaint = Ui.text(Ui.medium, 25 * k, L_DIM);
         menuOptionPaint = Ui.text(Ui.medium, 30 * k, L_INK);
+        dockName = Ui.text(Ui.displaySemibold, 34 * k, L_INK);
         palLabel = Ui.text(Ui.semibold, 22 * k, L_DIM);
         palLabel.setLetterSpacing(0.08f);
         palText = Ui.text(Ui.semibold, 28 * k, L_INK);
@@ -1955,6 +1956,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void drawTiles(Canvas c) {
+        if (skinLayout && !shelf.isEmpty() && shelfIndex < shelf.size() && shelfIndex < tileFocus.length) {
+            // Pastel dock: the focused app's name above the glass, at its left (as in the maquette).
+            float show = Ui.clamp(tileFocus[shelfIndex].value);
+            if (show > 0.01f) {
+                dockName.setColor(Ui.alpha(tone(inkDay, WHITE), show));
+                c.drawText(shelf.get(shelfIndex).label, platterRect.left + 14 * k, platterRect.top - 30 * k, dockName);
+            }
+        }
         // The focused one last: it grows over its neighbors without being covered by them.
         int top = -1;
         float most = 0.02f;
@@ -2018,7 +2027,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float l = !reorderTop && i == liftIndex ? Math.max(0, moveLift.value) : 0;
         float f = tileFocus[i].value, fc = Ui.clamp(f), s = 1 + FOCUS_GROW * f + LIFT_GROW * l;
         RectF base = tileRects[i];
-        float bw = base.width(), bh = base.height(), r0 = TILE_RADIUS * k;
+        float bw = base.width(), bh = base.height(), r0 = (skinLayout ? 30 : TILE_RADIUS) * k;
         float cx = base.centerX(), cy = base.centerY();
         cell.set(cx - bw * s / 2, cy - bh * s / 2, cx + bw * s / 2, cy + bh * s / 2);
         float r = r0 * s;
@@ -2065,6 +2074,24 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             drawLogo(c, it, cell, s, 0);
         } else {
             if (it.tile != null) roundImage(c, it.tile, it.tileShader, cell, r);
+        }
+        if (skinLayout) {
+            // White rim on every tile, and a soft halo around the focused one.
+            float was = border.getStrokeWidth();
+            Paint.Style style0 = border.getStyle();
+            border.setStyle(Paint.Style.STROKE);
+            if (fc > 0.01f) {
+                border.setStrokeWidth(9 * k);
+                border.setColor(Ui.alpha(0xFFFFFFFF, 0.28f * fc));
+                tmp.set(cell);
+                tmp.inset(-4.5f * k, -4.5f * k);
+                c.drawRoundRect(tmp, r + 4.5f * k, r + 4.5f * k, border);
+            }
+            border.setStrokeWidth(2.25f * k);
+            border.setColor(Ui.alpha(0xFFFFFFFF, 0.55f + 0.4f * fc));
+            c.drawRoundRect(cell, r, r, border);
+            border.setStrokeWidth(was);
+            border.setStyle(style0);
         }
     }
 
@@ -2187,7 +2214,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float gap = 18 * k, groupGap = 56 * k;
         int groups = Math.max(1, (drawerInputs > 0 ? 1 : 0) + (drawerHome > drawerInputs ? 1 : 0) + (n > drawerHome ? 1 : 0));
         float tw = Math.min(230 * k, (right - left - Math.max(0, n - groups) * gap - (groups - 1) * groupGap) / Math.max(1, n));
-        float x = left, top = ROW_TOP * k;
+        float used = n * tw + Math.max(0, n - groups) * gap + (groups - 1) * groupGap;
+        float x = left + Math.max(0, (right - left - used) / 2), top = ROW_TOP * k;   // the row sits in the middle
         for (int i = 0; i < n; i++) {
             if ((i == drawerInputs || i == drawerHome) && i > 0) x += groupGap - gap;
             drawerRects[i].set(x, top, x + tw, top + ROW_H * k);
