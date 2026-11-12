@@ -86,9 +86,10 @@ final class Ui {
 
     /** Inter at an optical size (14 = text, 32 = display) and weight; the system font if the file is missing. */
     private static Typeface font(AssetManager a, int opticalSize, int weight) {
-        if (has(a, FONT)) {
+        String file = has(a, FIGTREE) ? FIGTREE : FONT;
+        if (has(a, file)) {
             try {
-                Typeface t = new Typeface.Builder(a, FONT)
+                Typeface t = new Typeface.Builder(a, file)
                         .setFontVariationSettings("'opsz' " + opticalSize + ", 'wght' " + weight).build();
                 if (t != null) return t;
             } catch (RuntimeException ignored) {
@@ -107,6 +108,8 @@ final class Ui {
     }
 
     private static final String FONT = "fonts/InterVariable.ttf";
+    /** Figtree (OFL), the maquette's typeface; it has no optical-size axis, which the variation settings ignore. */
+    private static final String FIGTREE = "fonts/Figtree.ttf";
 
     // MARK: - Text in the viewer's language
 
