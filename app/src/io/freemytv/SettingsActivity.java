@@ -333,7 +333,7 @@ public class SettingsActivity extends Activity {
                                 : freeActive() ? "Free My TV" : Ui.tr("Original");
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
-                    if (tab != 0) return tab == 1 ? Ui.tr("Performance") : Ui.tr("Good to know");
+                    if (row == 9 || tab != 0) return tab == 0 ? Ui.tr("Settings") : tab == 1 ? Ui.tr("Performance") : Ui.tr("Good to know");
                     String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Home Settings"),
                             Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"),
                             Ui.tr("TV Settings")};
@@ -414,10 +414,12 @@ public class SettingsActivity extends Activity {
                     focusBox.set(SEG_L * k, SEG_T * k, SEG_R * k, SEG_B * k);
                     return focusBox;
                 }
+                if (row == 9) {
+                    focusBox.set(LIST_X * k, TOP * k, LIST_R * k, (TOP + 62) * k);
+                    return focusBox;
+                }
                 if (tab != 0) {
-                    // Off the first tab the one other stop is the tab bar itself.
-                    if (row == 1) focusBox.set(LIST_X * k, TOP * k, LIST_R * k, (TOP + 62) * k);
-                    else focusBox.setEmpty();
+                    focusBox.setEmpty();
                     return focusBox;
                 }
                 top = rowTop(slotOf(row));
@@ -568,7 +570,7 @@ public class SettingsActivity extends Activity {
 
         private int rowCount() {
             switch (screen) {
-                case MAIN: return tab == 0 ? 9 : 2;
+                case MAIN: return 10;   // 0 home screen, 1-8 the rows, 9 the tab bar
                 case COUNTDOWN: return 2;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingLabels().length);
@@ -667,7 +669,7 @@ public class SettingsActivity extends Activity {
             glassCard(c, l, t, l + w, t + h, h / 2);
             float cw = w / 3;
             int ac = accent();
-            float tf = tab != 0 ? Ui.clamp(pop[1].value) : 0;
+            float tf = Ui.clamp(pop[9].value);
             if (tf > 0.01f) {
                 tmp.set(l - 5 * k, t - 5 * k, l + w + 5 * k, t + h + 5 * k);
                 glassRim.setStrokeWidth(4 * k);
@@ -678,12 +680,11 @@ public class SettingsActivity extends Activity {
             for (int i = 0; i < 3; i++) {
                 if (i == tab) {
                     tmp.set(l + cw * i + 5 * k, t + 5 * k, l + cw * (i + 1) - 5 * k, t + h - 5 * k);
-                    white.setColor(focus == 0 ? blend(ac, light ? 0xFFFFFFFF : 0xFF000000, 0.55f) : ac);
+                    white.setColor(ac);
                     c.drawRoundRect(tmp, (h - 10 * k) / 2, (h - 10 * k) / 2, white);
                     white.setColor(0xFFFFFFFF);
                 }
-                rowLabel.setColor(i == tab ? (focus == 0 ? ac : 0xFFFFFFFF) : fg(0xB3));
-                if (i == tab && focus == 0) rowLabel.setColor(light ? INK : 0xFFFFFFFF);
+                rowLabel.setColor(i == tab ? 0xFFFFFFFF : fg(0xB3));
                 rowLabel.setTextAlign(Paint.Align.CENTER);
                 c.drawText(names[i], l + cw * (i + 0.5f), t + h / 2 + Ui.halfCap(rowLabel), rowLabel);
                 rowLabel.setTextAlign(Paint.Align.LEFT);
@@ -693,32 +694,18 @@ public class SettingsActivity extends Activity {
         /** The Free My TV / Original slider on the left card; OK moves it, and the ring shows it has the focus. */
         private void drawSwitch(Canvas c, float seconds) {
             boolean working = busy();
-            float f = Ui.clamp(pop[0].value);
+            // The home screen entry: a glass row like the others; OK opens the page with the two choices.
             float l = SEG_L * k, t = SEG_T * k, r = SEG_R * k, b = SEG_B * k;
-            tmp.set(l, t, r, b);
-            float rad = (b - t) / 2;
-            iconBox.setColor(light ? 0x33000000 : 0x40FFFFFF);
-            c.drawRoundRect(tmp, rad, rad, iconBox);
-            boolean free = freeActive();
-            float half = (r - l) / 2;
-            float x0 = free ? l : l + half;
-            tmp.set(x0 + 6 * k, t + 6 * k, x0 + half - 6 * k, b - 6 * k);
-            white.setColor(accent());
-            c.drawRoundRect(tmp, rad - 6 * k, rad - 6 * k, white);
-            white.setColor(0xFFFFFFFF);
-            if (f > 0.01f) {
-                tmp.set(l - 5 * k, t - 5 * k, r + 5 * k, b + 5 * k);
-                glassRim.setStrokeWidth(4 * k);
-                glassRim.setColor(Ui.alpha(light ? 0xFF1C1C1E : 0xFFFFFFFF, 0.9f * f));
-                c.drawRoundRect(tmp, rad + 5 * k, rad + 5 * k, glassRim);
-                glassRim.setStrokeWidth(Math.max(1, 1.5f * k));
-            }
-            rowLabel.setTextAlign(Paint.Align.CENTER);
-            float base = (t + b) / 2 + Ui.halfCap(rowLabel);
-            rowLabel.setColor(free ? 0xFFFFFFFF : fg(0xD9));
-            c.drawText("Free My TV", l + half / 2, base, rowLabel);
-            rowLabel.setColor(free ? fg(0xD9) : 0xFFFFFFFF);
-            c.drawText(Ui.tr("Original"), l + half * 1.5f, base, rowLabel);
+            glassCard(c, l, t, r, b, (b - t) / 2);
+            rowRect.set(l, t, r, b);
+            float f = drawRowBackground(c, 0);
+            rowLabel.setColor(blend(fg(0xF2), INK, f));
+            rowValue.setColor(blend(fg(0xB3), 0xB31C1C1E, f));
+            float base = rowRect.centerY() + Ui.halfCap(rowLabel);
+            c.drawText(Ui.tr("Home Screen"), rowRect.left + 34 * k, base, rowLabel);
+            float cw = Symbols.width(getContext(), "chevron_right", 22 * k);
+            Symbols.draw(getContext(), c, "chevron_right", rowRect.right - 30 * k - cw / 2, rowRect.centerY(), 22 * k, blend(fg(0x66), 0x991C1C1E, f));
+            c.drawText(freeActive() ? "Free My TV" : Ui.tr("Original"), rowRect.right - 64 * k, base, rowValue);
             rowLabel.setTextAlign(Paint.Align.LEFT);
             String busyText = busyText();
             String error = phone ? HomeMode.phoneText() : stalled ? stalledText() : state.optString("error");
@@ -1022,14 +1009,15 @@ public class SettingsActivity extends Activity {
 
         /** Up and down on the first tab follow the drawn order (Countdowns sits before Sleep Timer). */
         private int mainStep(int f, int dir) {
-            int[] rowOf = {1, 2, 3, 4, 5, 8, 6, 7};
-            int slot = f == 0 ? -1 : slotOf(f);
-            slot = Math.max(-1, Math.min(rowOf.length - 1, slot + dir));
-            return slot < 0 ? 0 : rowOf[slot];
+            // The home screen entry, the tab bar, then (on the first tab) the rows in the order they are drawn.
+            int[] order = tab == 0 ? new int[] {0, 9, 1, 2, 3, 4, 5, 8, 6, 7} : new int[] {0, 9};
+            int at = 0;
+            for (int i = 0; i < order.length; i++) if (order[i] == f) at = i;
+            return order[Math.max(0, Math.min(order.length - 1, at + dir))];
         }
 
         private void wheel(int dir) {
-            if (screen == MAIN && tab == 0) {
+            if (screen == MAIN) {
                 focus = mainStep(focus, dir > 0 ? 1 : -1);
                 invalidate();
                 spoken.focusMoved();
@@ -1054,7 +1042,7 @@ public class SettingsActivity extends Activity {
             switch (e.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_UP:
                     if (down && screen == HOME_SETTINGS && pickScroll + focus == TOP_ROW) commitWatch();
-                    if (down && screen == MAIN && tab == 0) focus = mainStep(focus, -1);
+                    if (down && screen == MAIN) focus = mainStep(focus, -1);
                     else if (down && focus > 0) focus--;
                     else if (down && scrolling() && pickScroll > 0) pickScroll--;
                     invalidate();
@@ -1062,7 +1050,7 @@ public class SettingsActivity extends Activity {
                     return true;
                 case KeyEvent.KEYCODE_DPAD_DOWN:
                     if (down && screen == HOME_SETTINGS && pickScroll + focus == TOP_ROW) commitWatch();
-                    if (down && screen == MAIN && tab == 0) focus = mainStep(focus, 1);
+                    if (down && screen == MAIN) focus = mainStep(focus, 1);
                     else if (down && focus < rowCount() - 1) focus++;
                     else if (down && scrolling() && pickScroll + rowCount() < listSize()) pickScroll++;
                     invalidate();
@@ -1073,8 +1061,6 @@ public class SettingsActivity extends Activity {
                     if (down && screen == SHELF_EDIT) {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                         spoken.focusMoved();   // TalkBack reads the new value or place
-                    } else if (down && screen == MAIN && focus == 0) {
-                        // The home screen switch: only OK acts on it, the arrows leave it alone.
                     } else if (down && screen == MAIN) {
                         int next = Math.max(0, Math.min(2, tab + (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
                         if (next != tab) {
@@ -1390,7 +1376,7 @@ public class SettingsActivity extends Activity {
         private String unavailable(int i) {
             int n = rowCount();
             if (i < 0 || i >= n) return null;
-            if (screen == MAIN && tab != 0 && i >= 1) return null;
+            if (screen == MAIN && (tab != 0 && i >= 1 || i == 9)) return null;
             if (whyRows == null || whyRows.length != n || whyScreen != screen || whyScroll != pickScroll) {
                 whyRows = new String[n];
                 whyScreen = screen;
@@ -2804,7 +2790,7 @@ public class SettingsActivity extends Activity {
                 if (busy()) return;
                 screen = HOME_CHOICE;
                 focus = freeActive() ? 0 : 1;
-            } else if (focus == 1 && tab != 0) {
+            } else if (focus == 9) {
                 return;   // the tab bar: the arrows change the tab
             } else if (focus == 8) {
                 screen = COUNTDOWN;
