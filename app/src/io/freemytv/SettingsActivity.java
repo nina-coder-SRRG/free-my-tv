@@ -333,6 +333,7 @@ public class SettingsActivity extends Activity {
                                 : freeActive() ? "Free My TV" : Ui.tr("Original");
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
+                    if (tab != 0) return tab == 1 ? Ui.tr("Performance") : Ui.tr("Good to know");
                     String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Home Settings"),
                             Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"),
                             Ui.tr("TV Settings")};
@@ -409,7 +410,9 @@ public class SettingsActivity extends Activity {
                     return focusBox;
                 }
                 if (tab != 0) {
-                    focusBox.setEmpty();
+                    // Off the first tab the one other stop is the tab bar itself.
+                    if (row == 1) focusBox.set(LIST_X * k, TOP * k, LIST_R * k, (TOP + 62) * k);
+                    else focusBox.setEmpty();
                     return focusBox;
                 }
                 top = rowTop(row - 1);
@@ -560,7 +563,7 @@ public class SettingsActivity extends Activity {
 
         private int rowCount() {
             switch (screen) {
-                case MAIN: return tab == 0 ? 8 : 1;
+                case MAIN: return tab == 0 ? 8 : 2;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingLabels().length);
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
@@ -657,14 +660,23 @@ public class SettingsActivity extends Activity {
             glassCard(c, l, t, l + w, t + h, h / 2);
             float cw = w / 3;
             int ac = accent();
+            float tf = tab != 0 ? Ui.clamp(pop[1].value) : 0;
+            if (tf > 0.01f) {
+                tmp.set(l - 5 * k, t - 5 * k, l + w + 5 * k, t + h + 5 * k);
+                glassRim.setStrokeWidth(4 * k);
+                glassRim.setColor(Ui.alpha(light ? 0xFF1C1C1E : 0xFFFFFFFF, 0.9f * tf));
+                c.drawRoundRect(tmp, h / 2 + 5 * k, h / 2 + 5 * k, glassRim);
+                glassRim.setStrokeWidth(Math.max(1, 1.5f * k));
+            }
             for (int i = 0; i < 3; i++) {
                 if (i == tab) {
                     tmp.set(l + cw * i + 5 * k, t + 5 * k, l + cw * (i + 1) - 5 * k, t + h - 5 * k);
-                    white.setColor(ac);
+                    white.setColor(focus == 0 ? blend(ac, light ? 0xFFFFFFFF : 0xFF000000, 0.55f) : ac);
                     c.drawRoundRect(tmp, (h - 10 * k) / 2, (h - 10 * k) / 2, white);
                     white.setColor(0xFFFFFFFF);
                 }
-                rowLabel.setColor(i == tab ? 0xFFFFFFFF : fg(0xB3));
+                rowLabel.setColor(i == tab ? (focus == 0 ? ac : 0xFFFFFFFF) : fg(0xB3));
+                if (i == tab && focus == 0) rowLabel.setColor(light ? INK : 0xFFFFFFFF);
                 rowLabel.setTextAlign(Paint.Align.CENTER);
                 c.drawText(names[i], l + cw * (i + 0.5f), t + h / 2 + Ui.halfCap(rowLabel), rowLabel);
                 rowLabel.setTextAlign(Paint.Align.LEFT);
@@ -1037,11 +1049,19 @@ public class SettingsActivity extends Activity {
                     if (down && screen == SHELF_EDIT) {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                         spoken.focusMoved();   // TalkBack reads the new value or place
+                    } else if (down && screen == MAIN && focus == 0) {
+                        // The slider: → Original, ← Free My TV.
+                        boolean toOriginal = e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT;
+                        if (!busy() && toOriginal == freeActive()) {
+                            requestedAt = HomeMode.request(getContext(), toOriginal ? HomeMode.ORIGINAL : HomeMode.FREE);
+                            pendingAt = SystemClock.uptimeMillis();
+                            stalled = false;
+                        }
                     } else if (down && screen == MAIN) {
                         int next = Math.max(0, Math.min(2, tab + (e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1)));
                         if (next != tab) {
                             tab = next;
-                            if (focus >= rowCount()) focus = 0;
+                            if (focus >= rowCount()) focus = rowCount() - 1;
                             whyRows = null;
                             spoken.focusMoved();
                         }
@@ -1349,6 +1369,7 @@ public class SettingsActivity extends Activity {
         private String unavailable(int i) {
             int n = rowCount();
             if (i < 0 || i >= n) return null;
+            if (screen == MAIN && tab != 0 && i >= 1) return null;
             if (whyRows == null || whyRows.length != n || whyScreen != screen || whyScroll != pickScroll) {
                 whyRows = new String[n];
                 whyScreen = screen;
@@ -2699,6 +2720,8 @@ public class SettingsActivity extends Activity {
                 requestedAt = HomeMode.request(c, freeActive() ? HomeMode.ORIGINAL : HomeMode.FREE);
                 pendingAt = SystemClock.uptimeMillis();
                 stalled = false;
+            } else if (focus == 1 && tab != 0) {
+                return;   // the tab bar: the arrows change the tab
             } else if (focus == 1) {
                 pause();
                 activity.showPreview();
