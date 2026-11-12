@@ -125,6 +125,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final float L_TOP_CLOCK_BASE = 168;
     // Pastel home: the row of glass cards under the clock (weather, month calendar, countdown).
     private static final float W_TOP = 340, W_H = 405, W_GAP = 30, W_RADIUS = 54;
+    /** Relative widths of the weather, calendar and countdown cards (as in the maquette). */
+    private static final float[] W_WEIGHT = {0.6f, 1.35f, 1f};
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
     private static String[] tabs;
     private static int tabsGeneration = -1;
@@ -208,7 +210,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // Holding OK on a card: a small menu (hide it, open the app, cancel) on its own layer, drawn only while it shows.
     private static final float MENU_W = 720, MENU_PAD = 44, MENU_INSET = 16, MENU_ROW = 76, MENU_STEP = 80, MENU_R = 36;
     private final Spring menu = new Spring(0.26f, 0.86f, 0), menuPick = new Spring(0.22f, 0.9f, 0);
-    private final String[] menuOptions = new String[3];
+    private static final int MENU_MAX = 8;
+    private final String[] menuOptions = new String[MENU_MAX];
+    private final String[] menuValues = new String[MENU_MAX];
+    private final boolean[] menuChecks = new boolean[MENU_MAX];
+    private int menuCount = 3;
+    /** The menu is the look panel (theme, mode, cards) instead of a Continue Watching card's. */
+    private boolean paletteMenu;
     private final RectF menuPanel = new RectF();
     private final Set<String> hiddenNow = new HashSet<>();   // hidden this session (a reload already under way may not know)
     private boolean menuOpen;
@@ -2160,6 +2168,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (!same) drawerDirty = true;
     }
 
+    /** The pastel home has its weather in a card under the clock and no quotes: the drawer keeps only the shortcuts. */
+    private boolean drawerWeather() { return Prefs.weather() && !skinLayout; }
+
+    private boolean drawerQuotes() { return Prefs.quotes() && HomeData.active().length > 0 && !skinLayout; }
+
     private void layoutDrawer() {
         int n = drawerItems.size();
         float left = MARGIN * k, right = CONTENT_R * k;
@@ -2174,7 +2187,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             x += tw + gap;
         }
         float cardsTop = CARDS_TOP * k, split = left + (right - left) * 0.585f;
-        boolean wx = Prefs.weather(), qt = Prefs.quotes() && HomeData.active().length > 0;
+        boolean wx = drawerWeather(), qt = drawerQuotes();
         // A card that is off gives its room to the other one.
         weatherCard.set(left, cardsTop, qt ? split - 16 * k : right, cardsTop + CARDS_H * k);
         quotesCard.set(wx ? split + 16 * k : left, cardsTop, right, cardsTop + CARDS_H * k);
@@ -2294,8 +2307,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         for (int i = 0; i < drawerItems.size(); i++) if (drawerFocus[i].value > 0.02f && (top < 0 || drawerFocus[i].value > drawerFocus[top].value)) top = i;
         for (int i = 0; i < drawerItems.size(); i++) if (i != top) drawDrawerTile(c, i);
         if (top >= 0) drawDrawerTile(c, top);
-        if (Prefs.weather()) drawWeatherCard(c, weatherCard);
-        if (Prefs.quotes() && HomeData.active().length > 0) drawQuotesCard(c, quotesCard);
+        if (drawerWeather()) drawWeatherCard(c, weatherCard);
+        if (drawerQuotes()) drawQuotesCard(c, quotesCard);
     }
 
     /** Square drawer button: symbol and name; an input with no device is dimmed. Focused: white, with dark text. */
@@ -3064,7 +3077,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The menu's row under a point, if any. */
     private int menuAt(float x, float y) {
-        for (int i = 0; i < menuOptions.length; i++) {
+        for (int i = 0; i < menuCount; i++) {
             menuRow(i, hitBox);
             if (hitBox.contains(x, y)) return i;
         }
@@ -3440,6 +3453,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             r = tileRects[shelfIndex];
         }
         click.open();
+        if (it.kind == HomeApps.PALETTE) {
+            openPalette();
+            return;
+        }
         if (it.kind == HomeApps.RECENTS) {
             openRecents();
             return;
@@ -3793,7 +3810,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             return;
         }
         if (menuOpen) {
-            for (int i = 0; i < menuOptions.length; i++) out.add(a11yId(MENU_ITEMS, i));
+            for (int i = 0; i < menuCount; i++) out.add(a11yId(MENU_ITEMS, i));
             return;
         }
         if (sheetOpen) {
@@ -3805,8 +3822,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (continueMode()) for (int i = 0; i < watching.size(); i++) out.add(a11yId(Z_WATCH, i));
         for (int i = shelfFirst; i < Math.min(shelf.size(), shelfFirst + shelfVisible); i++) out.add(a11yId(Z_SHELF, i));
         for (int i = 0; i < drawerItems.size(); i++) out.add(a11yId(Z_DRAWER, i));
-        if (drawerOpen && Prefs.weather()) out.add(a11yId(WIDGETS, 0));
-        if (drawerOpen && Prefs.quotes() && HomeData.active().length > 0) out.add(a11yId(WIDGETS, 1));
+        if (drawerOpen && drawerWeather()) out.add(a11yId(WIDGETS, 0));
+        if (drawerOpen && drawerQuotes()) out.add(a11yId(WIDGETS, 1));
     }
 
     private String a11yText(int id) {
@@ -3816,9 +3833,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 if (!recentsOpen()) return "";
                 return recents.count() == 0 ? Ui.tr("Recent Apps") + ". " + recents.emptyText() : recents.spoken(i);
             case MENU_ITEMS:
-                if (!menuOpen || i >= menuOptions.length) return "";
+                if (!menuOpen || i >= menuCount) return "";
                 return (i == 0 && menuItem != null ? menuItem.title + ". " : "") + menuOptions[i] + ", "
-                        + Ui.trf("{i} of {n}", "i", i + 1, "n", menuOptions.length);
+                        + Ui.trf("{i} of {n}", "i", i + 1, "n", menuCount);
             case GRID:
                 if (i >= others.size()) return "";
                 return label(others, i) + ", " + Ui.trf("{i} of {n}", "i", i + 1, "n", others.size());
@@ -3863,7 +3880,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 dy = 0;
                 break;
             case MENU_ITEMS:
-                if (!menuOpen || i >= menuOptions.length) return false;
+                if (!menuOpen || i >= menuCount) return false;
                 menuRow(i, a11yRect);
                 dy = 0;
                 break;
@@ -3952,8 +3969,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private List<Integer> widgets() {
         List<Integer> out = new ArrayList<>();
         if (!drawerOpen) return out;
-        if (Prefs.weather()) out.add(0);
-        if (Prefs.quotes() && HomeData.active().length > 0) out.add(1);
+        if (drawerWeather()) out.add(0);
+        if (drawerQuotes()) out.add(1);
         return out;
     }
 
@@ -3989,7 +4006,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             return;
         }
         if (menuOpen) {
-            if (group == MENU_ITEMS && i < menuOptions.length && i != menuIndex) moveMenu(i - menuIndex);
+            if (group == MENU_ITEMS && i < menuCount && i != menuIndex) moveMenu(i - menuIndex);
             return;
         }
         if (group == GRID) {
@@ -4464,9 +4481,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         menuTitle = TextUtils.ellipsize(title, new TextPaint(menuTitlePaint), width, TextUtils.TruncateAt.END).toString();
         menuSub = menuItem.app == null ? "" : TextUtils.ellipsize(menuItem.app, new TextPaint(menuSubPaint), width,
                 TextUtils.TruncateAt.END).toString();
+        paletteMenu = false;
+        menuCount = 3;
         menuOptions[0] = Ui.tr("Hide from Continue Watching");
         menuOptions[1] = Ui.tr("Open the app");
         menuOptions[2] = Ui.tr("Cancel");
+        for (int i = 0; i < MENU_MAX; i++) { menuValues[i] = null; menuChecks[i] = false; }
         layoutMenu();
         menuOpen = true;
         menuIndex = 0;
@@ -4481,7 +4501,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The panel, centered on the screen: title, the app's name (if known) and the three options. */
     private void layoutMenu() {
-        float rows = (MENU_PAD + 34 + (menuSub.isEmpty() ? 0 : 38) + 32 + 2 * MENU_STEP + MENU_ROW + MENU_INSET) * k;
+        float rows = (MENU_PAD + 34 + (menuSub.isEmpty() ? 0 : 38) + 32 + (menuCount - 1) * MENU_STEP + MENU_ROW + MENU_INSET) * k;
         float left = (w - MENU_W * k) / 2, top = (h - rows) / 2;
         menuPanel.set(left, top, left + MENU_W * k, top + rows);
         menuOptionsTop = top + (MENU_PAD + 34 + (menuSub.isEmpty() ? 0 : 38) + 32) * k;
@@ -4545,7 +4565,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void moveMenu(int d) {
-        int next = Math.max(0, Math.min(menuOptions.length - 1, menuIndex + d));
+        int next = Math.max(0, Math.min(menuCount - 1, menuIndex + d));
         if (next == menuIndex) return;
         menuIndex = next;
         menuPick.target = next;
@@ -4556,6 +4576,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private void pickMenu() {
+        if (paletteMenu) {
+            pickPalette();
+            return;
+        }
         WatchNext.Item it = menuItem;
         int choice = menuIndex;
         closeMenu(false);
@@ -4595,7 +4619,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float v = menu.value, a = Ui.clamp(v);
         if (a <= 0.004f) return;
         fill.setShader(null);
-        fill.setColor(Ui.alpha(tone(0x38000000, 0x80000000), a));
+        fill.setColor(Ui.alpha(paletteMenu ? tone(0x1A000000, 0x4D000000) : tone(0x38000000, 0x80000000), a));
         c.drawRect(screen, fill);
         float s = 0.92f + 0.08f * v, r = MENU_R * k;
         c.save();
@@ -4622,14 +4646,95 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         fill.setColor(Ui.alpha(tone(L_INK, WHITE), a));
         c.drawRoundRect(tmp, rowR, rowR, fill);
         int ink = tone(L_INK, WHITE), onPill = tone(WHITE, L_INK);
-        for (int i = 0; i < menuOptions.length; i++) {
+        for (int i = 0; i < menuCount; i++) {
             menuRow(i, tmp);
             float f = Ui.clamp(1 - Math.abs(pick - i));
-            int base = i == 0 ? tone(0xFFD70015, 0xFFFF6961) : ink;   // hiding is the destructive one: red
+            int base = i == 0 && !paletteMenu ? tone(0xFFD70015, 0xFFFF6961) : ink;   // hiding is the destructive one: red
             menuOptionPaint.setColor(Ui.alpha(blend(base, onPill, f), a));
             c.drawText(menuOptions[i], tmp.left + 28 * k, tmp.centerY() + Ui.halfCap(menuOptionPaint), menuOptionPaint);
+            if (!paletteMenu) continue;
+            int mark = Ui.alpha(blend(ink, onPill, f), a);
+            if (menuChecks[i]) {
+                Symbols.draw(getContext(), c, "check", tmp.right - 52 * k, tmp.centerY(), 40 * k, mark);
+            } else if (menuValues[i] != null) {
+                Paint.Align was = menuOptionPaint.getTextAlign();
+                int old = menuOptionPaint.getColor();
+                menuOptionPaint.setTextAlign(Paint.Align.RIGHT);
+                menuOptionPaint.setColor(Ui.alpha(blend(tone(L_DIM, 0xFF98989D), onPill, f), a));
+                c.drawText(menuValues[i], tmp.right - 28 * k, tmp.centerY() + Ui.halfCap(menuOptionPaint), menuOptionPaint);
+                menuOptionPaint.setTextAlign(was);
+                menuOptionPaint.setColor(old);
+            }
         }
         c.restore();
+    }
+
+    // MARK: - The look panel (the palette button): theme, mode and cards, changed without leaving the home screen
+
+    private void openPalette() {
+        if (menuOpen || menuTitlePaint == null) return;
+        paletteMenu = true;
+        menuItem = null;
+        menuTitle = Ui.tr("Look");
+        menuSub = "";
+        menuCount = 8;
+        fillPalette();
+        layoutMenu();
+        menuOpen = true;
+        menuIndex = Math.max(0, java.util.Arrays.asList(Shaders.SKINS).indexOf(Prefs.skin()));
+        menuPick.snap(menuIndex);
+        menu.target = 1;
+        menuLayer.setVisibility(VISIBLE);
+        menuLayer.invalidate();
+        wake();
+        click.open();
+        spoken.focusMoved();
+    }
+
+    /** The panel's rows from the current settings: four looks, the mode, then the three cards. */
+    private void fillPalette() {
+        String look = Prefs.skin();
+        for (int i = 0; i < 4; i++) {
+            menuOptions[i] = Shaders.SKIN_NAMES[i];
+            menuChecks[i] = Shaders.SKINS[i].equals(look);
+            menuValues[i] = null;
+        }
+        String theme = Prefs.theme();
+        menuOptions[4] = Ui.tr("Mode");
+        menuChecks[4] = false;
+        menuValues[4] = theme.equals("light") ? Ui.tr("Light") : theme.equals("dark") ? Ui.tr("Dark") : Ui.tr("Automatic");
+        menuOptions[5] = Ui.tr("Weather");
+        menuChecks[5] = Prefs.weather();
+        menuOptions[6] = Ui.tr("Calendar");
+        menuChecks[6] = Prefs.calendarCard();
+        menuOptions[7] = Ui.tr("Countdown");
+        menuChecks[7] = Prefs.countdownCard();
+        for (int i = 5; i < 8; i++) menuValues[i] = null;
+    }
+
+    private void pickPalette() {
+        int i = menuIndex;
+        if (i < 4) {
+            Prefs.setSkin(Shaders.SKINS[i]);
+        } else if (i == 4) {
+            String theme = Prefs.theme();
+            Prefs.setTheme(theme.equals("auto") ? "light" : theme.equals("light") ? "dark" : "auto");
+        } else if (i == 5) {
+            Prefs.setWeather(!Prefs.weather());
+        } else if (i == 6) {
+            Prefs.setCalendarCard(!Prefs.calendarCard());
+        } else {
+            Prefs.setCountdownCard(!Prefs.countdownCard());
+        }
+        click.open();
+        fillPalette();
+        updatePalette();
+        checkNight(true);
+        heroDirty = statusDirty = drawerDirty = true;
+        if (sky != null) sky.invalidate();
+        platter.invalidate();
+        menuLayer.invalidate();
+        wake();
     }
 
     private void selectTab(int index) {
@@ -4855,12 +4960,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int n = (weather ? 1 : 0) + (calendar ? 1 : 0) + (count ? 1 : 0);
         if (n == 0) return;
         refreshWidgets();
-        float gap = W_GAP * k, w = (CONTENT_R - MARGIN) * k, cw = (w - gap * (n - 1)) / n;
+        float gap = W_GAP * k, w = (CONTENT_R - MARGIN) * k - gap * (n - 1);
+        float total = (weather ? W_WEIGHT[0] : 0) + (calendar ? W_WEIGHT[1] : 0) + (count ? W_WEIGHT[2] : 0);
         float left = MARGIN * k, top = W_TOP * k;
         int accent = widgetAccent();
         wCount.setColor(accent);
         for (int i = 0; i < 3; i++) {
             if (i == 0 && !weather || i == 1 && !calendar || i == 2 && !count) continue;
+            float cw = w * W_WEIGHT[i] / total;
             widgetCard.set(left, top, left + cw, top + W_H * k);
             left += cw + gap;
             drawerGlass(c, widgetCard, W_RADIUS * k, 0.72f, 0x1A000000, 10 * k);

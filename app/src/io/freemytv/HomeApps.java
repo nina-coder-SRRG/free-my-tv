@@ -61,6 +61,8 @@ final class HomeApps {
     static final int INPUTS = 7;
     /** The Recent Apps switcher (the home screen opens it). */
     static final int RECENTS = 8;
+    /** The round button that opens the look panel (theme, mode and cards). */
+    static final int PALETTE = 9;
     /** A Home Assistant entity in the drawer (HomeAssistant): OK calls its service, nothing opens. */
     static final int HOME_ASSISTANT = 9;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
@@ -261,7 +263,7 @@ final class HomeApps {
 
     // MARK: - Top buttons (the round ones at the top right)
 
-    static final String TOP_LIVE = "live", TOP_INPUTS = "inputs", TOP_SETTINGS = "settings", TOP_RECENTS = "recents", TOP_STORE = "store";
+    static final String TOP_LIVE = "live", TOP_INPUTS = "inputs", TOP_SETTINGS = "settings", TOP_RECENTS = "recents", TOP_STORE = "store", TOP_PALETTE = "palette";
     static final List<String> TOP_DEFAULT = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS));
     /** What can be a top button: the default three, and Recent Apps and App Store for whoever adds them. */
     static final List<String> TOP_ALL = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS, TOP_RECENTS, TOP_STORE));
@@ -270,8 +272,14 @@ final class HomeApps {
     /** The keys of the top buttons, in order (Settings > Top Buttons; by default Live TV, HDMI Inputs, Settings). */
     static List<String> topButtonKeys() {
         List<String> saved = Prefs.topButtons();
-        if (saved == null) return TOP_DEFAULT;
+        if (saved == null) {
+            if (!Prefs.skinOn()) return TOP_DEFAULT;
+            List<String> withLook = new ArrayList<>(TOP_DEFAULT);
+            withLook.add(0, TOP_PALETTE);
+            return withLook;
+        }
         List<String> keys = new ArrayList<>();
+        if (Prefs.skinOn()) keys.add(TOP_PALETTE);   // the pastel look has its own button, always first
         for (String key : saved) {
             if (key.equals(TOP_RECENTS) && Prefs.recents().equals("off")) continue;   // Recent Apps is off: no button either
             if (TOP_ALL.contains(key) && !keys.contains(key)) keys.add(key);
@@ -308,6 +316,7 @@ final class HomeApps {
             case TOP_INPUTS: return action(INPUTS, TOP_INPUTS, Ui.tr("HDMI Inputs"), "hdmi");
             case TOP_RECENTS: return action(RECENTS, TOP_RECENTS, Ui.tr("Recent Apps"), "recents");
             case TOP_STORE: return action(APP, TOP_STORE, Ui.tr("App Store"), "store");
+            case TOP_PALETTE: return action(PALETTE, TOP_PALETTE, Ui.tr("Look"), "palette");
             default: return action(SETTINGS, TOP_SETTINGS, Ui.tr("light|Settings"), "settings");
         }
     }
@@ -357,7 +366,7 @@ final class HomeApps {
     /** Free My TV settings, in the corner of the home screen. */
     /** The TV's own settings (android.settings.SETTINGS; where nothing answers it, Android TV's settings app). */
     static Item tvSettings() {
-        return shortcut(ANDROID_SETTINGS, "tv-settings", Ui.tr("TV Settings"), "tv_settings");
+        return shortcut(ANDROID_SETTINGS, "tv-settings", Ui.tr("TV Settings"), "tune");
     }
 
     static Item settings() {
@@ -369,7 +378,7 @@ final class HomeApps {
         List<Item> items = new ArrayList<>();
         items.add(shortcut(ALL_APPS, "all", Ui.tr("All Apps"), "apps"));
         items.add(shortcut(SETTINGS, "settings", Ui.tr("Home Settings"), "settings"));
-        items.add(shortcut(ANDROID_SETTINGS, "tv-settings", Ui.tr("TV Settings"), "tv_settings"));
+        items.add(shortcut(ANDROID_SETTINGS, "tv-settings", Ui.tr("TV Settings"), "tune"));
         // Android's list of apps (force stop, clear data, uninstall), where TV Settings opens the maker's own menu: a
         // Philips TPM171E (Android 8) has no Apps there, and its stock home screen was the way to an app's page (#452).
         String tvSettings = answers(c, new Intent(Settings.ACTION_SETTINGS));
