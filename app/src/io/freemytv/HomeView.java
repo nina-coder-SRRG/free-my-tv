@@ -2329,6 +2329,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private Paint glassRim, glassSheen;
+    private final android.graphics.Path glassClip = new android.graphics.Path();
     private final android.graphics.Matrix sheenMatrix = new android.graphics.Matrix();
 
     /**
@@ -2338,16 +2339,22 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void pastelGlass(Canvas c, RectF r, float radius) {
         float dk = dark();
         if (dk < 0.999f) {
+            // The shadow only outside the card: under see-through glass it would turn the card grey.
+            glassClip.reset();
+            glassClip.addRoundRect(r, radius, radius, android.graphics.Path.Direction.CW);
+            c.save();
+            c.clipOutPath(glassClip);
             tmp.set(r);
-            tmp.offset(0, 14 * k);
-            shadow.setColor(Ui.alpha(0x26000000, 1 - dk));
+            tmp.offset(0, 12 * k);
+            shadow.setColor(Ui.alpha(0x1F2A1E3C, 1 - dk));
             shadows.draw(c, tmp, radius, SHADOW_BLUR * k, shadow);
-            scene.glass(c, r, radius, 0xFFFFFFFF, 0.34f, 0, 0, 0.02f, 1, 1 - dk);
+            c.restore();
+            scene.glass(c, r, radius, 0xFFFFFFFF, 0.22f, 0, 0, 0.02f, 1, 1 - dk);
             if (glassRim == null) {
                 glassRim = new Paint(Paint.ANTI_ALIAS_FLAG);
                 glassRim.setStyle(Paint.Style.STROKE);
                 glassSheen = new Paint(Paint.ANTI_ALIAS_FLAG);
-                glassSheen.setShader(new android.graphics.LinearGradient(0, 0, 0, 1, 0x99FFFFFF, 0x00FFFFFF,
+                glassSheen.setShader(new android.graphics.LinearGradient(0, 0, 0, 1, 0x55FFFFFF, 0x00FFFFFF,
                         android.graphics.Shader.TileMode.CLAMP));
             }
             int a = Math.round(255 * (1 - dk));
@@ -2358,8 +2365,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             glassSheen.getShader().setLocalMatrix(sheenMatrix);
             glassSheen.setAlpha(a);
             c.drawRoundRect(tmp, radius, radius, glassSheen);
-            glassRim.setStrokeWidth(3 * k);
-            glassRim.setColor(Ui.alpha(0xFFFFFFFF, 0.85f * (1 - dk)));
+            glassRim.setStrokeWidth(1.5f * k);
+            glassRim.setColor(Ui.alpha(0xFFFFFFFF, 0.5f * (1 - dk)));
             c.drawRoundRect(tmp, radius, radius, glassRim);
         }
         if (dk > 0.001f) scene.glass(c, r, radius, SMOKE, 0.4f, 0, 0, 0.02f, 1, dk);
