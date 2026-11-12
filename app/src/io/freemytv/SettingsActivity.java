@@ -153,6 +153,7 @@ public class SettingsActivity extends Activity {
                 POWER = 6, TMDB_KEY = 7, PICKS = 8, PICK_FROM = 9, WATCH_APPS = 10;
         private static final float LIST_ROW_H = 68, LIST_ROW_GAP = 6;
         private static final int PICK_VISIBLE = 9;
+        private static final String[] ROW_ICONS = {"home", "sparkles", "tune", "apps", "smart_button", "gamepad", "bedtime", "tv_settings"};
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_GAP = 8, CHOICE_H = 104;
         // The main menu: eight rows, then the comparison, the picks (with the Watchmode credit) and two notices, all on
         // one 1080 px screen: the rows share the 462 px that seven took.
@@ -226,6 +227,7 @@ public class SettingsActivity extends Activity {
         private final boolean phone;   // installed on a phone: the settings say where it goes (HomeMode.phone)
         private int w, h;
         private float k = 1;
+        private Paint glassFill, glassRim, iconBox;
         private Paint title, subtitle, version, rowLabel, rowValue, rowSub, header, cellLabel, cellValue, warn, spinner, white, shadow;
         private TextPaint notice, rowValueFit;
 
@@ -452,6 +454,15 @@ public class SettingsActivity extends Activity {
             Symbols.warm(getContext(), "sparkles", 150 * k);
             Symbols.warm(getContext(), "chevron_right", 22 * k);
             Symbols.warm(getContext(), "check", 26 * k);
+            for (String n : ROW_ICONS) Symbols.warm(getContext(), n, 26 * k);
+            glassFill = new Paint(Paint.ANTI_ALIAS_FLAG);
+            glassFill.setColor(0x24FFFFFF);
+            glassRim = new Paint(Paint.ANTI_ALIAS_FLAG);
+            glassRim.setStyle(Paint.Style.STROKE);
+            glassRim.setStrokeWidth(Math.max(1, 1.5f * k));
+            glassRim.setColor(0x59FFFFFF);
+            iconBox = new Paint(Paint.ANTI_ALIAS_FLAG);
+            iconBox.setColor(0x2EFFFFFF);
             title = Ui.text(Ui.displaySemibold, 50 * k, 0xFFFFFFFF);
             title.setTextAlign(Paint.Align.CENTER);
             subtitle = Ui.text(Ui.regular, 26 * k, 0x99FFFFFF);
@@ -571,8 +582,9 @@ public class SettingsActivity extends Activity {
             }
             scene.drawBackground(c);
 
-            // On the left: big symbol, title, description.
+            // On the left: big symbol, title, description, on a glass card.
             float cx = 500 * k;
+            if (screen == MAIN) glassCard(c, 150 * k, 230 * k, 850 * k, 790 * k, 44 * k);
             Symbols.draw(getContext(), c, "sparkles", cx, 400 * k, 150 * k, 0xEBFFFFFF);
             c.drawText("Free My TV", cx, 612 * k, title);
             c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 660 * k, subtitle);
@@ -585,7 +597,15 @@ public class SettingsActivity extends Activity {
             else drawList(c);
         }
 
+        private void glassCard(Canvas c, float l, float t, float r, float b, float radius) {
+            tmp.set(l, t, r, b);
+            c.drawRoundRect(tmp, radius, radius, glassFill);
+            c.drawRoundRect(tmp, radius, radius, glassRim);
+        }
+
         private void drawMain(Canvas c, float seconds) {
+            glassCard(c, (LIST_X - 24) * k, (MAIN_TOP - 16) * k, (LIST_R + 24) * k,
+                    (MAIN_TOP + 8 * (ROW_H + MAIN_GAP) + 8) * k, 40 * k);
             boolean working = busy();
             String busyText = busyText();
             String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
@@ -601,7 +621,12 @@ public class SettingsActivity extends Activity {
                 int ink = off ? blend(0x73FFFFFF, 0x731C1C1E, f) : blend(0xF2FFFFFF, INK, f);
                 rowLabel.setColor(ink);
                 float base = rowRect.centerY() + Ui.halfCap(rowLabel);
-                c.drawText(labels[i], rowRect.left + 30 * k, base, rowLabel);
+                float bs = 38 * k, bx = rowRect.left + 22 * k;
+                tmp.set(bx, rowRect.centerY() - bs / 2, bx + bs, rowRect.centerY() + bs / 2);
+                iconBox.setColor(blend(0x2EFFFFFF, 0x14000000, f));
+                c.drawRoundRect(tmp, 11 * k, 11 * k, iconBox);
+                Symbols.draw(getContext(), c, ROW_ICONS[i], tmp.centerX(), tmp.centerY(), 24 * k, ink);
+                c.drawText(labels[i], rowRect.left + 78 * k, base, rowLabel);
                 float right = rowRect.right - 30 * k;
                 if (off) {
                     rowValue.setColor(blend(0x59FFFFFF, 0x591C1C1E, f));
