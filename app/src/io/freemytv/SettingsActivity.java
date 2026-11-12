@@ -150,14 +150,14 @@ public class SettingsActivity extends Activity {
 
     static final class SettingsView extends View implements Choreographer.FrameCallback {
         private static final int MAIN = 0, HOME_CHOICE = 1, HOME_SETTINGS = 2, REMOTE_KEYS = 3, PICKER = 4, SHELF_EDIT = 5,
-                POWER = 6, TMDB_KEY = 7, PICKS = 8, PICK_FROM = 9, WATCH_APPS = 10;
+                POWER = 6, TMDB_KEY = 7, PICKS = 8, PICK_FROM = 9, WATCH_APPS = 10, COUNTDOWN = 11;
         private static final float LIST_ROW_H = 68, LIST_ROW_GAP = 6;
         private static final int PICK_VISIBLE = 9;
-        private static final String[] ROW_ICONS = {"home", "sparkles", "tune", "apps", "smart_button", "gamepad", "bedtime", "tv_settings"};
+        private static final String[] ROW_ICONS = {"home", "sparkles", "tune", "apps", "smart_button", "gamepad", "bedtime", "tv_settings", "bell"};
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_GAP = 8, CHOICE_H = 104;
         // The main menu: eight rows, then the comparison, the picks (with the Watchmode credit) and two notices, all on
         // one 1080 px screen: the rows share the 462 px that seven took.
-        private static final float TOP = 240, MAIN_TOP = TOP + 128, ROW_H = 50, MAIN_GAP = 4;
+        private static final float TOP = 240, MAIN_TOP = TOP + 128, ROW_H = 46, MAIN_GAP = 4;
         // Left card: the segmented switch between Free My TV and the original home screen.
         private static final float SEG_L = 190, SEG_R = 810, SEG_T = TOP + 420, SEG_B = TOP + 504;
         private int tab;   // 0 Settings, 1 Performance, 2 Good to know
@@ -398,8 +398,13 @@ public class SettingsActivity extends Activity {
         }
 
         /** Top of the nth row of the Settings tab: five under "Customize", then two under "System". */
+        /** Where a row sits on the Settings tab: the first five, Countdowns, then Sleep Timer and TV Settings. */
+        private int slotOf(int row) {
+            return row <= 5 ? row - 1 : row == 8 ? 5 : row;
+        }
+
         private float rowTop(int n) {
-            return n < 5 ? MAIN_TOP + n * (ROW_H + MAIN_GAP) : MAIN_TOP + 5 * (ROW_H + MAIN_GAP) + 70 + (n - 5) * (ROW_H + MAIN_GAP);
+            return n < 6 ? MAIN_TOP + n * (ROW_H + MAIN_GAP) : MAIN_TOP + 6 * (ROW_H + MAIN_GAP) + 68 + (n - 6) * (ROW_H + MAIN_GAP);
         }
 
         private RectF rowBox(int row) {
@@ -415,7 +420,7 @@ public class SettingsActivity extends Activity {
                     else focusBox.setEmpty();
                     return focusBox;
                 }
-                top = rowTop(row - 1);
+                top = rowTop(slotOf(row));
                 height = ROW_H;
             } else if (screen == HOME_CHOICE) {
                 top = LIST_TOP + 20 + row * (CHOICE_H + ROW_GAP);
@@ -563,7 +568,8 @@ public class SettingsActivity extends Activity {
 
         private int rowCount() {
             switch (screen) {
-                case MAIN: return tab == 0 ? 8 : 2;
+                case MAIN: return tab == 0 ? 9 : 2;
+                case COUNTDOWN: return 2;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingLabels().length);
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
@@ -604,7 +610,7 @@ public class SettingsActivity extends Activity {
             // On the left: big symbol, title, description, on a glass card.
             float cx = 500 * k;
             if (screen == MAIN) {
-                glassCard(c, 150 * k, TOP * k, 850 * k, (TOP + 582) * k, 40 * k);
+                glassCard(c, 150 * k, TOP * k, 850 * k, (TOP + 606) * k, 40 * k);
                 Symbols.draw(getContext(), c, "sparkles", cx, (TOP + 115) * k, 120 * k, fg(0xEB));
                 c.drawText("Free My TV", cx, (TOP + 236) * k, title);
                 c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, (TOP + 284) * k, subtitle);
@@ -620,6 +626,7 @@ public class SettingsActivity extends Activity {
             else if (screen == TMDB_KEY) drawKey(c);
             else if (screen == PICK_FROM) drawServices(c);
             else if (screen == WATCH_APPS) drawWatchApps(c);
+            else if (screen == COUNTDOWN) drawCountdowns(c);
             else drawList(c);
         }
 
@@ -752,7 +759,7 @@ public class SettingsActivity extends Activity {
         private void drawMain(Canvas c, float seconds) {
             drawTabs(c);
             drawSwitch(c, seconds);
-            float panelTop = MAIN_TOP - 44, panelBottom = TOP + 582;
+            float panelTop = MAIN_TOP - 44, panelBottom = TOP + 606;
             if (tab == 1) {
                 glassCard(c, (LIST_X - 24) * k, panelTop * k, (LIST_R + 24) * k, panelBottom * k, 34 * k);
                 drawComparison(c, (panelTop + 80) * k);
@@ -764,13 +771,14 @@ public class SettingsActivity extends Activity {
                 drawNotices(c, y + 50 * k);
                 return;
             }
-            group(c, Ui.tr("Customize"), panelTop, 5);
-            group(c, Ui.tr("System"), rowTop(5) - 44, 2);
+            group(c, Ui.tr("Customize"), panelTop, 6);
+            group(c, Ui.tr("System"), rowTop(6) - 44, 2);
             String[] labels = {Ui.tr("Screensaver"),
                     Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
-                    Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
+                    Ui.tr("Remote Buttons"), Ui.tr("Countdowns"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
+            int[] rowOf = {1, 2, 3, 4, 5, 8, 6, 7};
             for (int n = 0; n < labels.length; n++) {
-                int i = n + 1;
+                int i = rowOf[n];
                 float y = rowTop(n) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
                 float f = drawRowBackground(c, i);
@@ -1115,6 +1123,9 @@ public class SettingsActivity extends Activity {
                                 pickScroll = 0;   // the Picks screen has a few rows
                                 focus = 1;
                                 screen = PICKS;
+                            } else if (screen == COUNTDOWN) {
+                                focus = 8;
+                                screen = MAIN;
                             } else if (screen == WATCH_APPS) {
                                 focus = WATCH_ROW;   // on the list's first screen
                                 pickScroll = 0;
@@ -2542,6 +2553,68 @@ public class SettingsActivity extends Activity {
                     LIST_X * k + 30 * k, hy, hint);
         }
 
+        private String countdownSummary(int slot) {
+            long day = Prefs.countdownDay(slot);
+            String name = Prefs.countdownLabel(slot);
+            if (day <= 0) return slot == 0 ? Ui.tr("Christmas") : Ui.tr("Not set");
+            String date = java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, Ui.locale()).format(day);
+            return name.isEmpty() ? date : name + " · " + date;
+        }
+
+        private void drawCountdowns(Canvas c) {
+            Paint heading = Ui.text(Ui.displaySemibold, 34 * k, fg(0xFF));
+            c.drawText(Ui.tr("Countdowns"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
+            String[] labels = {Ui.tr("First countdown"), Ui.tr("Second countdown")};
+            for (int i = 0; i < 2; i++) {
+                float y = (LIST_TOP + 20 + i * (LIST_ROW_H + LIST_ROW_GAP)) * k;
+                rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
+                float f = drawRowBackground(c, i);
+                rowLabel.setColor(blend(fg(0xF2), INK, f));
+                rowValue.setColor(blend(fg(0xB3), 0xB31C1C1E, f));
+                float base = rowRect.centerY() + Ui.halfCap(rowLabel);
+                c.drawText(labels[i], rowRect.left + 30 * k, base, rowLabel);
+                String v = TextUtils.ellipsize(countdownSummary(i), new TextPaint(rowValue), 520 * k, TextUtils.TruncateAt.END).toString();
+                c.drawText(v, rowRect.right - 30 * k, base, rowValue);
+            }
+            Paint hint = Ui.text(Ui.regular, 23 * k, fg(0x8C));
+            c.drawText(Ui.tr("OK: pick the name, then the date. The home screen follows."), LIST_X * k + 30 * k,
+                    (LIST_TOP + 20 + 2 * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k, hint);
+        }
+
+        /** OK on a countdown: its name, then its date (the second one can also be removed). */
+        private void editCountdown(int slot) {
+            EditText field = new EditText(activity);
+            field.setSingleLine(true);
+            field.setHint(Ui.tr("Event name"));
+            field.setText(Prefs.countdownLabel(slot));
+            field.setImeOptions(EditorInfo.IME_ACTION_NEXT);
+            AlertDialog.Builder b = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(slot == 0 ? Ui.tr("First countdown") : Ui.tr("Second countdown"))
+                    .setView(field)
+                    .setPositiveButton(Ui.tr("Next"), (d, which) -> pickCountdownDay(slot, field.getText().toString().trim()))
+                    .setNegativeButton(Ui.tr("Cancel"), null);
+            b.setNeutralButton(slot == 0 ? Ui.tr("Christmas") : Ui.tr("Remove"), (d, which) -> {
+                Prefs.setCountdown(slot, "", 0);
+                invalidate();
+            });
+            b.show();
+        }
+
+        private void pickCountdownDay(int slot, String name) {
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            long was = Prefs.countdownDay(slot);
+            if (was > 0) cal.setTimeInMillis(was);
+            android.app.DatePickerDialog dialog = new android.app.DatePickerDialog(activity,
+                    android.R.style.Theme_DeviceDefault_Dialog_Alert, (view, y, m, d) -> {
+                        java.util.Calendar day = java.util.Calendar.getInstance();
+                        day.set(y, m, d, 0, 0, 0);
+                        day.set(java.util.Calendar.MILLISECOND, 0);
+                        Prefs.setCountdown(slot, name, day.getTimeInMillis());
+                        invalidate();
+                    }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH));
+            dialog.show();
+        }
+
         private void drawList(Canvas c) {
             boolean keys = screen == REMOTE_KEYS;
             String[] labels = listLabels();
@@ -2614,7 +2687,10 @@ public class SettingsActivity extends Activity {
         private void activate() {
             Context c = getContext();
             if (tellWhy()) return;
-            if (screen == HOME_CHOICE) {
+            if (screen == COUNTDOWN) {
+                editCountdown(focus);
+                return;
+            } else if (screen == HOME_CHOICE) {
                 boolean wantFree = focus == 0;
                 boolean already = wantFree ? freeActive() : HomeMode.ORIGINAL.equals(state.optString("mode", HomeMode.ORIGINAL));
                 if (!already && !busy()) {
@@ -2722,6 +2798,9 @@ public class SettingsActivity extends Activity {
                 stalled = false;
             } else if (focus == 1 && tab != 0) {
                 return;   // the tab bar: the arrows change the tab
+            } else if (focus == 8) {
+                screen = COUNTDOWN;
+                focus = 0;
             } else if (focus == 1) {
                 pause();
                 activity.showPreview();

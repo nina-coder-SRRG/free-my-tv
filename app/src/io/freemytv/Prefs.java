@@ -374,10 +374,14 @@ final class Prefs {
     static boolean countdownCard() { return sp().getBoolean("countdownCard", true); }
     static void setCountdownCard(boolean on) { put("countdownCard", on); }
     /** The countdown's name and day (midnight, local time); without a day, the next December 25. */
-    static String countdownLabel() { return sp().getString("countdownLabel", "").trim(); }
-    static long countdownDay() { return sp().getLong("countdownDay", 0); }
-    static void setCountdown(String label, long day) {
-        sp().edit().putString("countdownLabel", label).putLong("countdownDay", day).apply();
+    static String countdownLabel() { return countdownLabel(0); }
+    static long countdownDay() { return countdownDay(0); }
+    /** Two countdowns (slot 0 and 1); the second is only shown once it has a day. */
+    static String countdownLabel(int slot) { return sp().getString(slot == 0 ? "countdownLabel" : "countdown2Label", "").trim(); }
+    static long countdownDay(int slot) { return sp().getLong(slot == 0 ? "countdownDay" : "countdown2Day", 0); }
+    static void setCountdown(int slot, String label, long day) {
+        sp().edit().putString(slot == 0 ? "countdownLabel" : "countdown2Label", label)
+                .putLong(slot == 0 ? "countdownDay" : "countdown2Day", day).apply();
         version++;
     }
     static boolean weather() { return sp().getBoolean("weather", true); }

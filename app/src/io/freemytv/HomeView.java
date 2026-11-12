@@ -965,6 +965,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         wMonth = Ui.text(Ui.displaySemibold, 34 * k, L_INK);
         wCount = Ui.numbers(Ui.displaySemibold, 144 * k, L_INK);
         wCount.setLetterSpacing(-0.05f);
+        wCount2 = Ui.numbers(Ui.displaySemibold, 72 * k, L_INK);
+        wCount2.setLetterSpacing(-0.05f);
         lClockQuote = Ui.numbers(Ui.medium, 28 * k, L_DIM);
         lightGradient = tintShade = null;
         buttonPaint = Ui.text(Ui.semibold, 29 * k, INK);
@@ -1269,11 +1271,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** Pastel theme on: its text colors, and the clock at the top-left with the date beside it. */
     private boolean skinLayout;
     private final RectF widgetCard = new RectF();
-    private Paint wLabel, wBig, wText, wDim, wHead, wDay, wDayOn, wMonth, wCount;
+    private Paint wLabel, wBig, wText, wDim, wHead, wDay, wDayOn, wMonth, wCount, wCount2;
     private long widgetDay = -1;
     private int widgetPrefs = -1;
     private String widgetLanguage = "";
     private String monthLabel = "", countText = "", countUnit = "", countName = "";
+    private String countText2 = "", countUnit2 = "", countName2 = "";
+    private boolean count2;
     private final String[] weekHeads = new String[7];
     private int firstCol, monthDays, todayDate;
     private int inkDay = L_INK, dimDay = L_DIM, faintDay = L_FAINT;
@@ -1526,6 +1530,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         wDay.setColor(tone(inkDay, WHITE));
         wMonth.setColor(tone(inkDay, WHITE));
         wCount.setColor(widgetAccent());
+        wCount2.setColor(widgetAccent());
         lClockQuote.setColor(tone(dimDay, 0xFF98989D));
         staleQuote.setColor(tone(faintDay, 0x99FFFFFF));
         if (continueMode()) applyWatchContrast();
@@ -5190,6 +5195,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         countUnit = n == 1 ? Ui.tr("day left") : Ui.tr("days left");
         String name = Prefs.countdownLabel();
         countName = name.isEmpty() ? (Prefs.countdownDay() <= 0 ? Ui.tr("Christmas") : "") : name;
+        long target2 = Prefs.countdownDay(1);
+        count2 = target2 > 0;
+        if (count2) {
+            long n2 = Math.max(0, Math.round((target2 - today.getTimeInMillis()) / 86_400_000.0));
+            countText2 = String.valueOf(n2);
+            countUnit2 = n2 == 1 ? Ui.tr("day left") : Ui.tr("days left");
+            countName2 = Prefs.countdownLabel(1);
+        }
     }
 
     /** The row of glass cards under the clock, as many as are on, sharing the width. */
@@ -5258,6 +5271,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawCountdownWidget(Canvas c, RectF r) {
         float x = r.left + 40 * k;
+        if (count2) {
+            // Two countdowns share the card: the name, then the number and its unit, twice.
+            String[] names = {countName.isEmpty() ? Ui.tr("Countdown") : countName, countName2.isEmpty() ? Ui.tr("Countdown") : countName2};
+            String[] texts = {countText, countText2}, units = {countUnit, countUnit2};
+            float half = r.height() / 2;
+            for (int b = 0; b < 2; b++) {
+                float top = r.top + b * half;
+                c.drawText(names[b], x, top + 62 * k, wText);
+                float base = top + 140 * k;
+                c.drawText(texts[b], x - Ui.leftBearing(wCount2, texts[b]), base, wCount2);
+                c.drawText(units[b], x + wCount2.measureText(texts[b]) + 16 * k, base, wDim);
+            }
+            return;
+        }
         c.drawText(Ui.tr("Countdown"), x, r.top + 72 * k, wLabel);
         float base = r.centerY() + 46 * k;
         c.drawText(countText, x - Ui.leftBearing(wCount, countText), base, wCount);
